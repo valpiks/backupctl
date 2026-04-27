@@ -10,10 +10,11 @@ func NewRootCommand() *cobra.Command {
 		Short: "Database backupt CLI utility",
 	}
 
-	rootCmd.AddCommand(NewVersionCommand())
-	rootCmd.AddCommand(NewConfigCommand())
+	rootCmd.AddCommand(newVersionCommand())
+	rootCmd.AddCommand(newConfigCommand())
 	rootCmd.AddCommand(newTestCommand())
 	rootCmd.AddCommand(newBackupCommand())
+	rootCmd.AddCommand(newListCommand())
 
 	return rootCmd
 }

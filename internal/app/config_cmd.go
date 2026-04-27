@@ -7,7 +7,7 @@ import (
 	"github.com/valpiks/dbbackup/internal/config"
 )
 
-func NewConfigCommand() *cobra.Command {
+func newConfigCommand() *cobra.Command {
 	var configPath string
 
 	cmd := &cobra.Command{
