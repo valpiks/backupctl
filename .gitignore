@@ -1,0 +1,27 @@
+# build
+bin/
+*.exe
+*.out
+*.test
+
+# go
+vendor/
+
+# macOS
+.DS_Store
+
+# logs
+*.log
+
+# backups
+backups/
+
+# env
+.env
+
+# configs with secrets
+configs/config.yaml
+
+# IDE
+.vscode/
+.idea/

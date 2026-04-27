@@ -1,0 +1,82 @@
+package config
+
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Database DatabaseConfig  `yaml:"database"`
+	Backup   BackupConfig    `yaml:"backup"`
+	Storage  StorageConfig   `yaml:"storage"`
+	Logging  LogginingConfig `yaml:"loggining"`
+}
+
+type DatabaseConfig struct {
+	Type     string `yaml:"type"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Name     string `yaml:"name"`
+	SSLmode  string `yaml:"sslmode"`
+}
+
+type BackupConfig struct {
+	Type        string `yaml:"type"`
+	Compression string `yaml:"compression"`
+}
+
+type StorageConfig struct {
+	Type string `yaml:"type"`
+	Path string `yaml:"path"`
+}
+
+type LogginingConfig struct {
+	Level string `yaml:"level"`
+}
+
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config %w", err)
+	}
+
+	var cfg Config
+
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validate config %w", err)
+	}
+
+	return &cfg, nil
+}
+
+func (c *Config) Validate() error {
+	if c.Database.Type == "" {
+		return fmt.Errorf("database.type is required")
+	}
+
+	if c.Database.Name == "" {
+		return fmt.Errorf("database.name is required")
+	}
+
+	if c.Backup.Type == "" {
+		return fmt.Errorf("backup.type is required")
+	}
+
+	if c.Storage.Type == "" {
+		return fmt.Errorf("storage.type is required")
+	}
+
+	if c.Storage.Path == "" {
+		return fmt.Errorf("storage.path is required")
+	}
+
+	return nil
+}
