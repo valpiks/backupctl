@@ -8,10 +8,10 @@ import (
 )
 
 type Config struct {
-	Database DatabaseConfig  `yaml:"database"`
-	Backup   BackupConfig    `yaml:"backup"`
-	Storage  StorageConfig   `yaml:"storage"`
-	Logging  LogginingConfig `yaml:"loggining"`
+	Database DatabaseConfig `yaml:"database"`
+	Backup   BackupConfig   `yaml:"backup"`
+	Storage  StorageConfig  `yaml:"storage"`
+	Logging  LoggingConfig  `yaml:"logging"`
 }
 
 type DatabaseConfig struct {
@@ -34,7 +34,7 @@ type StorageConfig struct {
 	Path string `yaml:"path"`
 }
 
-type LogginingConfig struct {
+type LoggingConfig struct {
 	Level string `yaml:"level"`
 }
 

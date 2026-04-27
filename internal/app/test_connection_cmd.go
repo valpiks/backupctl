@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/dbbackup/internal/config"
-	"github.com/valpiks/dbbackup/internal/database/postgres"
+	"github.com/valpiks/backupctl/internal/config"
+	"github.com/valpiks/backupctl/internal/database/postgres"
+	"github.com/valpiks/backupctl/internal/logger"
 )
 
 func newTestCommand() *cobra.Command {
@@ -25,15 +26,22 @@ func newTestCommand() *cobra.Command {
 				return err
 			}
 
+			log := logger.New(cfg.Logging.Level)
+			log.Info("config loaded", "path", configPath)
+			log.Info("connection test started", "host", cfg.Database.Host, "port", cfg.Database.Port, "db", cfg.Database.Name)
+
 			driver, err := postgres.NewDriver(cfg.Database)
 			if err != nil {
+				log.Error("database driver initialization failed", "error", err)
 				return err
 			}
 
 			if err := driver.TestConnection(ctx); err != nil {
+				log.Error("connection test failed", "host", cfg.Database.Host, "port", cfg.Database.Port, "db", cfg.Database.Name, "error", err)
 				return err
 			}
 
+			log.Info("connection test succeeded", "host", cfg.Database.Host, "port", cfg.Database.Port, "db", cfg.Database.Name)
 			fmt.Println("connection successful")
 			return nil
 		},

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/valpiks/dbbackup/internal/compression"
-	"github.com/valpiks/dbbackup/internal/database"
-	"github.com/valpiks/dbbackup/internal/storage"
-	"github.com/valpiks/dbbackup/internal/storage/local"
+	"github.com/valpiks/backupctl/internal/compression"
+	"github.com/valpiks/backupctl/internal/database"
+	"github.com/valpiks/backupctl/internal/storage"
+	"github.com/valpiks/backupctl/internal/storage/local"
 )
 
 type Options struct {

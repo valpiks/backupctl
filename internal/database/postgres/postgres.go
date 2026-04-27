@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"strconv"
 
-	"github.com/valpiks/dbbackup/internal/config"
-	"github.com/valpiks/dbbackup/internal/database"
+	"github.com/valpiks/backupctl/internal/config"
+	"github.com/valpiks/backupctl/internal/database"
 )
 
 type Driver struct {

@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/dbbackup/internal/compression"
-	"github.com/valpiks/dbbackup/internal/config"
-	"github.com/valpiks/dbbackup/internal/database"
-	"github.com/valpiks/dbbackup/internal/database/postgres"
-	"github.com/valpiks/dbbackup/internal/storage/local"
+	"github.com/valpiks/backupctl/internal/compression"
+	"github.com/valpiks/backupctl/internal/config"
+	"github.com/valpiks/backupctl/internal/database"
+	"github.com/valpiks/backupctl/internal/database/postgres"
+	"github.com/valpiks/backupctl/internal/logger"
+	"github.com/valpiks/backupctl/internal/storage/local"
 )
 
 func newRestorCommand() *cobra.Command {
@@ -37,30 +38,40 @@ func newRestorCommand() *cobra.Command {
 				return err
 			}
 
+			log := logger.New(cfg.Logging.Level)
+			log.Info("config loaded", "path", configPath)
+
 			if !yes {
-				confirmed, err := confirmRestore(fileName)
+				confirmed, err := confirmRestore(fileName, cfg.Database.Name)
 				if err != nil {
+					log.Error("restore confirmation failed", "file", fileName, "error", err)
 					return err
 				}
 
 				if !confirmed {
+					log.Info("restore cancelled", "file", fileName, "db", cfg.Database.Name)
 					fmt.Println("restore cancelled")
 					return nil
 				}
 			}
 
+			log.Info("restore started", "file", fileName, "db", cfg.Database.Name)
+
 			driver, err := postgres.NewDriver(cfg.Database)
 			if err != nil {
+				log.Error("database driver initialization failed", "error", err)
 				return err
 			}
 
 			storage, err := local.NewStorage(cfg.Storage.Path)
 			if err != nil {
+				log.Error("storage initialization failed", "path", cfg.Storage.Path, "error", err)
 				return err
 			}
 
 			reader, err := storage.Open(ctx, fileName)
 			if err != nil {
+				log.Error("open backup failed", "file", fileName, "error", err)
 				return err
 			}
 			defer reader.Close()
@@ -69,15 +80,18 @@ func newRestorCommand() *cobra.Command {
 
 			decompressionReader, err := compressor.Decompress(reader)
 			if err != nil {
+				log.Error("decompress backup failed", "file", fileName, "error", err)
 				return err
 			}
 			defer decompressionReader.Close()
 
 			err = driver.Restore(ctx, decompressionReader, database.RestoreOptions{TargetDatabase: cfg.Database.Name})
 			if err != nil {
+				log.Error("restore failed", "file", fileName, "db", cfg.Database.Name, "error", err)
 				return err
 			}
 
+			log.Info("restore finished", "file", fileName, "db", cfg.Database.Name)
 			fmt.Println("restore complete successfully")
 			return nil
 		},
@@ -90,8 +104,13 @@ func newRestorCommand() *cobra.Command {
 	return cmd
 }
 
-func confirmRestore(fileName string) (bool, error) {
-	fmt.Printf("Are you sure you want to restore from %q? [y/N]: ", fileName)
+func confirmRestore(fileName string, dbName string) (bool, error) {
+	fmt.Printf(
+		"WARNING: you are about to restore database %q from %q\n",
+		dbName,
+		fileName,
+	)
+	fmt.Print("This may overwrite existing data. Continue? [y/N]: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	answer, err := reader.ReadString('\n')

@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/dbbackup/internal/backup"
-	"github.com/valpiks/dbbackup/internal/compression"
-	"github.com/valpiks/dbbackup/internal/config"
-	"github.com/valpiks/dbbackup/internal/database/postgres"
-	"github.com/valpiks/dbbackup/internal/logger"
-	"github.com/valpiks/dbbackup/internal/storage/local"
+	"github.com/valpiks/backupctl/internal/backup"
+	"github.com/valpiks/backupctl/internal/compression"
+	"github.com/valpiks/backupctl/internal/config"
+	"github.com/valpiks/backupctl/internal/database/postgres"
+	"github.com/valpiks/backupctl/internal/logger"
+	"github.com/valpiks/backupctl/internal/storage/local"
 )
 
 func newBackupCommand() *cobra.Command {
@@ -29,14 +29,17 @@ func newBackupCommand() *cobra.Command {
 			}
 
 			log := logger.New(cfg.Logging.Level)
+			log.Info("config loaded", "path", configPath)
 
 			driver, err := postgres.NewDriver(cfg.Database)
 			if err != nil {
+				log.Error("database driver initialization failed", "error", err)
 				return err
 			}
 
 			storage, err := local.NewStorage(cfg.Storage.Path)
 			if err != nil {
+				log.Error("storage initialization failed", "path", cfg.Storage.Path, "error", err)
 				return err
 			}
 

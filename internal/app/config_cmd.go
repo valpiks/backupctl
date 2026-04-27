@@ -4,7 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/dbbackup/internal/config"
+	"github.com/valpiks/backupctl/internal/config"
+	"github.com/valpiks/backupctl/internal/logger"
 )
 
 func newConfigCommand() *cobra.Command {
@@ -19,10 +20,14 @@ func newConfigCommand() *cobra.Command {
 				return err
 			}
 
+			log := logger.New(cfg.Logging.Level)
+			log.Info("config loaded", "path", configPath)
+
 			fmt.Printf("database type: %s\n", cfg.Database.Type)
 			fmt.Printf("database name: %s\n", cfg.Database.Name)
 			fmt.Printf("storage path: %s\n", cfg.Storage.Path)
 
+			log.Info("config printed", "db", cfg.Database.Name, "storage_path", cfg.Storage.Path)
 			return nil
 		},
 	}

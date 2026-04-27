@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/dbbackup/internal/backup"
-	"github.com/valpiks/dbbackup/internal/config"
-	"github.com/valpiks/dbbackup/internal/storage/local"
+	"github.com/valpiks/backupctl/internal/backup"
+	"github.com/valpiks/backupctl/internal/config"
+	"github.com/valpiks/backupctl/internal/logger"
+	"github.com/valpiks/backupctl/internal/storage/local"
 )
 
 func newListCommand() *cobra.Command {
@@ -31,13 +32,20 @@ func newListCommand() *cobra.Command {
 				return err
 			}
 
+			log := logger.New(cfg.Logging.Level)
+			log.Info("config loaded", "path", configPath)
+
 			storage, err := local.NewStorage(cfg.Storage.Path)
 			if err != nil {
+				log.Error("storage initialization failed", "path", cfg.Storage.Path, "error", err)
 				return err
 			}
 
+			log.Info("listing backups", "path", cfg.Storage.Path, "show_files", showFiles, "json", jsonOutput)
+
 			files, err := storage.List(ctx)
 			if err != nil {
+				log.Error("list backups failed", "path", cfg.Storage.Path, "error", err)
 				return err
 			}
 
@@ -45,6 +53,7 @@ func newListCommand() *cobra.Command {
 				for _, f := range files {
 					fmt.Printf("%s (%d bytes)\n", f.Name, f.Size)
 				}
+				log.Info("raw backup files listed", "count", len(files))
 				return nil
 			}
 
@@ -63,11 +72,13 @@ func newListCommand() *cobra.Command {
 				data, err := io.ReadAll(reader)
 				_ = reader.Close()
 				if err != nil {
-					return nil
+					log.Error("read metadata failed", "file", file.Name, "error", err)
+					return err
 				}
 
 				var metadata backup.Metadata
 				if err := json.Unmarshal(data, &metadata); err != nil {
+					log.Error("parse metadata failed", "file", file.Name, "error", err)
 					return fmt.Errorf("parse metadata %s: %w", file.Name, err)
 				}
 
@@ -77,10 +88,12 @@ func newListCommand() *cobra.Command {
 			if jsonOutput {
 				data, err := json.MarshalIndent(metadataList, "", "  ")
 				if err != nil {
+					log.Error("marshal backups json failed", "error", err)
 					return err
 				}
 
 				fmt.Println(string(data))
+				log.Info("backups listed", "files_total", len(files), "metadata_total", len(metadataList), "output", "json")
 				return nil
 			}
 
@@ -90,6 +103,7 @@ func newListCommand() *cobra.Command {
 				fmt.Printf("%-40s %-15s %-8s %-10s %-10s\n", m.FileName, m.DatabaseName, m.BackupType, m.Status, m.Duration)
 			}
 
+			log.Info("backups listed", "files_total", len(files), "metadata_total", len(metadataList), "output", "table")
 			return nil
 		},
 	}

@@ -6,8 +6,9 @@ import (
 
 func NewRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "dbbackup",
-		Short: "Database backupt CLI utility",
+		Use:   "backupctl",
+		Short: "Database backup CLI utility",
+		SilenceUsage: true,
 	}
 
 	rootCmd.AddCommand(newVersionCommand())

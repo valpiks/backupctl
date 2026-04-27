@@ -21,7 +21,11 @@ backups/
 
 # configs with secrets
 configs/config.yaml
+configs/config.local.yaml
 
 # IDE
 .vscode/
 .idea/
+
+# program
+backupctl

@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/valpiks/dbbackup/internal/storage"
+	"github.com/valpiks/backupctl/internal/storage"
 )
 
 type Storage struct {
