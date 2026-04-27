@@ -26,6 +26,3 @@ configs/config.local.yaml
 # IDE
 .vscode/
 .idea/
-
-# program
-backupctl
