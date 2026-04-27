@@ -39,7 +39,7 @@ func (s *Storage) Save(ctx context.Context, name string, data io.Reader) error {
 	return nil
 }
 
-func (s *Storage) Open(ctx context.Context, name string) (io.Reader, error) {
+func (s *Storage) Open(ctx context.Context, name string) (io.ReadCloser, error) {
 	filepath := filepath.Join(s.path, name)
 
 	file, err := os.Open(filepath)
