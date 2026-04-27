@@ -2,7 +2,9 @@ package backup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/valpiks/dbbackup/internal/compression"
@@ -70,6 +72,27 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	endedAt := time.Now().UTC()
+
+	metadata := Metadata{
+		DatabaseName: opts.DatabaseName,
+		BackupType:   opts.BackupType,
+		FileName:     fileName,
+		Status:       "success",
+		StartedAt:    startedAt,
+		EndedAt:      endedAt,
+		Duration:     endedAt.Sub(startedAt).String(),
+	}
+
+	metadataData, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal backup metadata %w", err)
+	}
+
+	metadataFileName := strings.TrimSuffix(fileName, ".sql.gz") + "metadata.json"
+
+	if err := s.storage.Save(ctx, metadataFileName, strings.NewReader(string(metadataData))); err != nil {
+		return nil, fmt.Errorf("save backup metadata %w", err)
+	}
 
 	return &Result{
 		FileName:  fileName,
