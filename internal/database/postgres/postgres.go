@@ -119,5 +119,24 @@ func (c *commandReadCloser) Close() error {
 }
 
 func (d *Driver) Restore(ctx context.Context, input io.Reader, opts database.RestoreOptions) error {
-	return fmt.Errorf("restore is not implemented yet")
+	args := []string{
+		"-h", d.cfg.Host,
+		"-p", strconv.Itoa(d.cfg.Port),
+		"-U", d.cfg.User,
+		"-d", d.cfg.Name,
+	}
+
+	cmd := exec.CommandContext(ctx, "psql", args...)
+
+	cmd.Env = append([]string{}, cmd.Environ()...)
+	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Password)
+
+	cmd.Stdin = input
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("postgres restore failed: %w: %s", err, string(output))
+	}
+
+	return nil
 }
