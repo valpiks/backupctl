@@ -14,7 +14,7 @@ type RestoreOptions struct {
 }
 
 type Driver interface {
-	TestConnection(ctx context.Context) error
+	Ping(ctx context.Context) error
 	Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser, error)
 	Restore(ctx context.Context, input io.Reader, opts RestoreOptions) error
 }

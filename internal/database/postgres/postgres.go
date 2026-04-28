@@ -42,7 +42,7 @@ func NewDriver(cfg config.DatabaseConfig) (*Driver, error) {
 	}, nil
 }
 
-func (d *Driver) TestConnection(ctx context.Context) error {
+func (d *Driver) Ping(ctx context.Context) error {
 	args := []string{
 		"-h", d.cfg.Host,
 		"-p", strconv.Itoa(d.cfg.Port),
