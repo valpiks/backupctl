@@ -20,6 +20,7 @@ import (
 func newRestorCommand() *cobra.Command {
 	var configPath string
 	var fileName string
+	var targetDB string
 	var yes bool
 
 	cmd := &cobra.Command{
@@ -38,24 +39,29 @@ func newRestorCommand() *cobra.Command {
 				return err
 			}
 
+			restoreDB := cfg.Database.Name
+			if targetDB != "" {
+				restoreDB = targetDB
+			}
+
 			log := logger.New(cfg.Logging.Level)
 			log.Info("config loaded", "path", configPath)
 
 			if !yes {
-				confirmed, err := confirmRestore(fileName, cfg.Database.Name)
+				confirmed, err := confirmRestore(fileName, restoreDB)
 				if err != nil {
 					log.Error("restore confirmation failed", "file", fileName, "error", err)
 					return err
 				}
 
 				if !confirmed {
-					log.Info("restore cancelled", "file", fileName, "db", cfg.Database.Name)
+					log.Info("restore cancelled", "file", fileName, "db", restoreDB)
 					fmt.Println("restore cancelled")
 					return nil
 				}
 			}
 
-			log.Info("restore started", "file", fileName, "db", cfg.Database.Name)
+			log.Info("restore started", "file", fileName, "db", restoreDB)
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
@@ -85,13 +91,13 @@ func newRestorCommand() *cobra.Command {
 			}
 			defer decompressionReader.Close()
 
-			err = driver.Restore(ctx, decompressionReader, database.RestoreOptions{TargetDatabase: cfg.Database.Name})
+			err = driver.Restore(ctx, decompressionReader, database.RestoreOptions{TargetDatabase: restoreDB})
 			if err != nil {
-				log.Error("restore failed", "file", fileName, "db", cfg.Database.Name, "error", err)
+				log.Error("restore failed", "file", fileName, "db", restoreDB, "error", err)
 				return err
 			}
 
-			log.Info("restore finished", "file", fileName, "db", cfg.Database.Name)
+			log.Info("restore finished", "file", fileName, "db", restoreDB)
 			fmt.Println("restore complete successfully")
 			return nil
 		},
@@ -99,6 +105,7 @@ func newRestorCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
 	cmd.Flags().StringVar(&fileName, "file", "", "Backup file name")
+	cmd.Flags().StringVar(&targetDB, "target-db", "", "Target database name for restore")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompt")
 
 	return cmd

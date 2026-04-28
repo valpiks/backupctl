@@ -119,11 +119,16 @@ func (c *commandReadCloser) Close() error {
 }
 
 func (d *Driver) Restore(ctx context.Context, input io.Reader, opts database.RestoreOptions) error {
+	targetDB := opts.TargetDatabase
+	if targetDB == "" {
+		targetDB = d.cfg.Name
+	}
+
 	args := []string{
 		"-h", d.cfg.Host,
 		"-p", strconv.Itoa(d.cfg.Port),
 		"-U", d.cfg.User,
-		"-d", d.cfg.Name,
+		"-d", targetDB,
 	}
 
 	cmd := exec.CommandContext(ctx, "psql", args...)

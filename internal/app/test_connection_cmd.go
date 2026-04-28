@@ -16,7 +16,7 @@ func newTestCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "test-connection",
-		Short: "Test database connection",
+		Short: "Test database connection (deprecated: use doctor)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
