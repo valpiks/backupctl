@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 func newListCommand() *cobra.Command {
 	var configPath string
+	var limit int
 	var showFiles bool
 	var jsonOutput bool
 
@@ -85,6 +87,14 @@ func newListCommand() *cobra.Command {
 				metadataList = append(metadataList, metadata)
 			}
 
+			sort.Slice(metadataList, func(i, j int) bool {
+				return metadataList[i].StartedAt.After(metadataList[j].StartedAt)
+			})
+
+			if limit > 0 && len(metadataList) > limit {
+				metadataList = metadataList[:limit]
+			}
+
 			if jsonOutput {
 				data, err := json.MarshalIndent(metadataList, "", "  ")
 				if err != nil {
@@ -109,6 +119,7 @@ func newListCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	cmd.Flags().IntVar(&limit, "limit", 0, "Limit number of backups shown")
 	cmd.Flags().BoolVar(&showFiles, "files", false, "Show raw backup directory files")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print backups as JSON")
 
