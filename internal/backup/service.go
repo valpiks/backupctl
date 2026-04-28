@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/valpiks/backupctl/internal/compression"
-	"github.com/valpiks/backupctl/internal/database"
+	database "github.com/valpiks/backupctl/internal/dbdriver"
 	"github.com/valpiks/backupctl/internal/storage"
 	"github.com/valpiks/backupctl/internal/storage/local"
 )

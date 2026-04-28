@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"github.com/valpiks/backupctl/internal/config"
-	"github.com/valpiks/backupctl/internal/database"
+	database "github.com/valpiks/backupctl/internal/dbdriver"
 )
 
 type Driver struct {

@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/compression"
 	"github.com/valpiks/backupctl/internal/config"
-	"github.com/valpiks/backupctl/internal/database"
-	"github.com/valpiks/backupctl/internal/database/postgres"
+	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
+	database "github.com/valpiks/backupctl/internal/dbdriver"
 	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/storage/local"
 )
@@ -57,7 +57,7 @@ func newRestorCommand() *cobra.Command {
 
 			log.Info("restore started", "file", fileName, "db", cfg.Database.Name)
 
-			driver, err := postgres.NewDriver(cfg.Database)
+			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
 				log.Error("database driver initialization failed", "error", err)
 				return err

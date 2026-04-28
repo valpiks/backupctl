@@ -8,7 +8,7 @@ import (
 	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/compression"
 	"github.com/valpiks/backupctl/internal/config"
-	"github.com/valpiks/backupctl/internal/database/postgres"
+	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/storage/local"
 )
@@ -31,7 +31,7 @@ func newBackupCommand() *cobra.Command {
 			log := logger.New(cfg.Logging.Level)
 			log.Info("config loaded", "path", configPath)
 
-			driver, err := postgres.NewDriver(cfg.Database)
+			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
 				log.Error("database driver initialization failed", "error", err)
 				return err

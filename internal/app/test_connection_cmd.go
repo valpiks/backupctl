@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/config"
-	"github.com/valpiks/backupctl/internal/database/postgres"
+	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/logger"
 )
 
@@ -30,7 +30,7 @@ func newTestCommand() *cobra.Command {
 			log.Info("config loaded", "path", configPath)
 			log.Info("connection test started", "host", cfg.Database.Host, "port", cfg.Database.Port, "db", cfg.Database.Name)
 
-			driver, err := postgres.NewDriver(cfg.Database)
+			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
 				log.Error("database driver initialization failed", "error", err)
 				return err
