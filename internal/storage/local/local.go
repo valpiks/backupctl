@@ -77,7 +77,7 @@ func (s *Storage) List(ctx context.Context) ([]storage.BackupFile, error) {
 	return files, nil
 }
 
-func (s *Storage) Delete(name string) error {
+func (s *Storage) Delete(ctx context.Context, name string) error {
 	filepath := filepath.Join(s.path, name)
 	return os.Remove(filepath)
 }

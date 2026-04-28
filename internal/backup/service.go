@@ -10,7 +10,6 @@ import (
 	"github.com/valpiks/backupctl/internal/compression"
 	database "github.com/valpiks/backupctl/internal/dbdriver"
 	"github.com/valpiks/backupctl/internal/storage"
-	"github.com/valpiks/backupctl/internal/storage/local"
 )
 
 type Options struct {
@@ -54,19 +53,17 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 
 	fileName := buildBackupFileName(opts.DatabaseName, startedAt)
 
-	localStorage, _ := s.storage.(*local.Storage)
-
 	if err := s.storage.Save(ctx, fileName, compressedReader); err != nil {
 		_ = backupReader.Close()
-		if localStorage != nil {
-			_ = localStorage.Delete(fileName)
+		if s.storage != nil {
+			_ = s.storage.Delete(ctx, fileName)
 		}
 		return nil, fmt.Errorf("save backup: %w", err)
 	}
 
 	if err := backupReader.Close(); err != nil {
-		if localStorage != nil {
-			_ = localStorage.Delete(fileName)
+		if s.storage != nil {
+			_ = s.storage.Delete(ctx, fileName)
 		}
 		return nil, fmt.Errorf("finish database backup: %w", err)
 	}
