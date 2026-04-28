@@ -15,8 +15,11 @@ backupctl version
 * Local file storage
 * Restore from backups
 * Backup metadata (JSON)
-* List backups (table / JSON output)
+* List backups (table / JSON output / limit)
+* Backup cleanup with retention and dry-run preview
+* Environment checks with `doctor`
 * Safe restore with confirmation prompt
+* Restore into a specific target database
 
 ---
 
@@ -104,7 +107,24 @@ Options:
 ```bash
 ./backupctl list --files   # show raw files
 ./backupctl list --json    # output as JSON
+./backupctl list --limit 5 # show latest 5 backups
 ```
+
+---
+
+### Doctor
+
+```bash
+./backupctl doctor
+```
+
+Checks:
+
+* config loading
+* database driver init
+* database connectivity
+* storage init
+* `pg_dump` and `psql` presence
 
 ---
 
@@ -125,6 +145,23 @@ Skip confirmation:
 
 ```bash
 ./backupctl restore --file backups/backup.sql.gz --yes
+./backupctl restore --file backups/backup.sql.gz --target-db restoredb
+```
+
+---
+
+### Cleanup
+
+Preview deletions:
+
+```bash
+./backupctl cleanup --keep-last 5 --dry-run
+```
+
+Delete old backups and keep the latest 5:
+
+```bash
+./backupctl cleanup --keep-last 5
 ```
 
 ---
@@ -132,14 +169,20 @@ Skip confirmation:
 ## Example workflow
 
 ```bash
+# check environment
+./backupctl doctor
+
 # create backup
 ./backupctl backup
 
 # list backups
-./backupctl list
+./backupctl list --limit 10
 
 # restore backup
-./backupctl restore --file backups/your_backup.sql.gz
+./backupctl restore --file backups/your_backup.sql.gz --target-db restoredb
+
+# cleanup old backups
+./backupctl cleanup --keep-last 5 --dry-run
 ```
 
 ---

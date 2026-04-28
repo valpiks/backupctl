@@ -27,7 +27,7 @@ func newDoctorCommand() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("[OK] config loaded")
+			fmt.Println("[OK] config loaded")
 
 			driver, err := factory.NewDriver(cfg.Database)
 			if err != nil {
