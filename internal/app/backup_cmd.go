@@ -10,7 +10,7 @@ import (
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/logger"
-	"github.com/valpiks/backupctl/internal/storage/local"
+	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
 func newBackupCommand() *cobra.Command {
@@ -37,7 +37,7 @@ func newBackupCommand() *cobra.Command {
 				return err
 			}
 
-			storage, err := local.NewStorage(cfg.Storage.Path)
+			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
 				log.Error("storage initialization failed", "path", cfg.Storage.Path, "error", err)
 				return err

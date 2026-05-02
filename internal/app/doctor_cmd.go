@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/config"
-	"github.com/valpiks/backupctl/internal/database/factory"
-	"github.com/valpiks/backupctl/internal/storage/local"
+	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
+	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
 func newDoctorCommand() *cobra.Command {
@@ -29,7 +29,7 @@ func newDoctorCommand() *cobra.Command {
 
 			fmt.Println("[OK] config loaded")
 
-			driver, err := factory.NewDriver(cfg.Database)
+			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
 				fmt.Printf("[FAIL] driver: %v\n", err)
 				return err
@@ -42,7 +42,7 @@ func newDoctorCommand() *cobra.Command {
 			}
 			fmt.Println("[OK] database ping")
 
-			if _, err := local.NewStorage(cfg.Storage.Path); err != nil {
+			if _, err := storagefactory.NewStorage(cfg.Storage); err != nil {
 				fmt.Printf("[FAIL] storage: %v\n", err)
 				return err
 			}

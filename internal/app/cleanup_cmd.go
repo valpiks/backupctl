@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/config"
-	"github.com/valpiks/backupctl/internal/storage/local"
+	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
 func newCleanupCommand() *cobra.Command {
@@ -36,7 +36,7 @@ func newCleanupCommand() *cobra.Command {
 				return err
 			}
 
-			storage, err := local.NewStorage(cfg.Storage.Path)
+			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
 				return err
 			}

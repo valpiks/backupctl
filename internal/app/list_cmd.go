@@ -13,7 +13,7 @@ import (
 	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/config"
 	"github.com/valpiks/backupctl/internal/logger"
-	"github.com/valpiks/backupctl/internal/storage/local"
+	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
 func newListCommand() *cobra.Command {
@@ -37,7 +37,7 @@ func newListCommand() *cobra.Command {
 			log := logger.New(cfg.Logging.Level)
 			log.Info("config loaded", "path", configPath)
 
-			storage, err := local.NewStorage(cfg.Storage.Path)
+			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
 				log.Error("storage initialization failed", "path", cfg.Storage.Path, "error", err)
 				return err
