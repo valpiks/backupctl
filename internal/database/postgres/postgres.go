@@ -22,19 +22,19 @@ func NewDriver(cfg config.DatabaseConfig) (*Driver, error) {
 	}
 
 	if cfg.Postgres.Host == "" {
-		return nil, fmt.Errorf("database.host is required")
+		return nil, fmt.Errorf("postgres.host is required")
 	}
 
 	if cfg.Postgres.Port == 0 {
-		return nil, fmt.Errorf("database.port is required")
+		return nil, fmt.Errorf("postgres.port is required")
 	}
 
 	if cfg.Postgres.User == "" {
-		return nil, fmt.Errorf("database.user is required")
+		return nil, fmt.Errorf("postgres.user is required")
 	}
 
 	if cfg.Postgres.Name == "" {
-		return nil, fmt.Errorf("database.name is required")
+		return nil, fmt.Errorf("postgres.name is required")
 	}
 
 	return &Driver{
