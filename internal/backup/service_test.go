@@ -143,7 +143,7 @@ func TestSerivice_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
 		t.Fatalf("unexpected backup contents: %q", string(sqlData))
 	}
 
-	metadataFile := strings.TrimSuffix(result.FileName, ".sql.gz") + "metadata.json"
+	metadataFile := strings.TrimSuffix(result.FileName, ".sql.gz") + ".metadata.json"
 
 	metadataData, ok := st.files[metadataFile]
 	if !ok {

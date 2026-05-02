@@ -26,3 +26,4 @@ configs/config.local.yaml
 # IDE
 .vscode/
 .idea/
+.cache

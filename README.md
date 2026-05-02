@@ -260,6 +260,41 @@ internal/logger      # logging
 
 ---
 
+## Integration Testing
+
+Integration tests are opt-in and require real database tools and running database instances.
+
+Enable integration tests:
+
+```bash
+export BACKUPCTL_RUN_INTEGRATION=1
+```
+
+PostgreSQL smoke test:
+
+```bash
+export BACKUPCTL_PG_HOST=localhost
+export BACKUPCTL_PG_PORT=5432
+export BACKUPCTL_PG_USER=postgres
+export BACKUPCTL_PG_PASSWORD=postgres
+export BACKUPCTL_PG_DB=backupctl_test
+
+go test ./internal/integration -run TestPostgresBackupRestoreSmoke -v
+```
+
+MongoDB smoke test:
+
+```bash
+export BACKUPCTL_MONGO_URI='mongodb://localhost:27017'
+export BACKUPCTL_MONGO_DB='backupctl_test'
+
+go test ./internal/integration -run TestMongoBackupRestoreSmoke -v
+```
+
+The PostgreSQL and MongoDB smoke tests are skipped unless `BACKUPCTL_RUN_INTEGRATION=1` is set.
+
+---
+
 ## Security
 
 * Do NOT commit real config files with passwords

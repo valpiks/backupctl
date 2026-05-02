@@ -85,7 +85,7 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("marshal backup metadata %w", err)
 	}
 
-	metadataFileName := strings.TrimSuffix(fileName, ".sql.gz") + "metadata.json"
+	metadataFileName := strings.TrimSuffix(fileName, ".sql.gz") + ".metadata.json"
 
 	if err := s.storage.Save(ctx, metadataFileName, strings.NewReader(string(metadataData))); err != nil {
 		return nil, fmt.Errorf("save backup metadata %w", err)

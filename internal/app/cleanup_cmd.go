@@ -86,7 +86,7 @@ func newCleanupCommand() *cobra.Command {
 				fmt.Println("would delete:")
 				for _, m := range metadataList {
 					fmt.Printf("- %s\n", m.FileName)
-					metaName := strings.TrimSuffix(m.FileName, ".sql.gz") + "metadata.json"
+					metaName := strings.TrimSuffix(m.FileName, ".sql.gz") + ".metadata.json"
 					fmt.Printf("- %s\n", metaName)
 				}
 				return nil
@@ -97,7 +97,7 @@ func newCleanupCommand() *cobra.Command {
 					return fmt.Errorf("delete backup %s: %w", m.FileName, err)
 				}
 
-				metaName := strings.TrimSuffix(m.FileName, ".sql.gz") + "metadata.json"
+				metaName := strings.TrimSuffix(m.FileName, ".sql.gz") + ".metadata.json"
 				if err := storage.Delete(ctx, metaName); err != nil {
 					return fmt.Errorf("delete metadata %s: %w", metaName, err)
 				}
