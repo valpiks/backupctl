@@ -15,13 +15,23 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	Type     string `yaml:"type"`
+	Type     string         `yaml:"type"`
+	Postgres PostgresConfig `yaml:"postgres"`
+	Mongo    MongoConfig    `yaml:"mongo"`
+}
+
+type PostgresConfig struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	Name     string `yaml:"name"`
-	SSLmode  string `yaml:"sslmode"`
+	SSLMode  string `yaml:"sslmode"`
+}
+
+type MongoConfig struct {
+	URI      string `yaml:"uri"`
+	Database string `yaml:"database"`
 }
 
 type BackupConfig struct {
@@ -62,8 +72,12 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("database.type is required")
 	}
 
-	if c.Database.Name == "" {
-		return fmt.Errorf("database.name is required")
+	if c.Database.Type == "postgres" && c.Database.Postgres.Name == "" {
+		return fmt.Errorf("postgres.name is required")
+	}
+
+	if c.Database.Type == "mongo" && c.Database.Mongo.Database == "" {
+		return fmt.Errorf("mongo.database is required")
 	}
 
 	if c.Backup.Type == "" {
@@ -79,4 +93,15 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func (d DatabaseConfig) ActiveDatabaseName() string {
+	switch d.Type {
+	case "postgres":
+		return d.Postgres.Name
+	case "mongo":
+		return d.Mongo.Database
+	default:
+		return ""
+	}
 }

@@ -28,7 +28,7 @@ func newTestCommand() *cobra.Command {
 
 			log := logger.New(cfg.Logging.Level)
 			log.Info("config loaded", "path", configPath)
-			log.Info("connection test started", "host", cfg.Database.Host, "port", cfg.Database.Port, "db", cfg.Database.Name)
+			log.Info("connection test started", "db", cfg.Database.ActiveDatabaseName())
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
@@ -37,11 +37,11 @@ func newTestCommand() *cobra.Command {
 			}
 
 			if err := driver.Ping(ctx); err != nil {
-				log.Error("connection test failed", "host", cfg.Database.Host, "port", cfg.Database.Port, "db", cfg.Database.Name, "error", err)
+				log.Error("connection test failed", "db", cfg.Database.ActiveDatabaseName(), "error", err)
 				return err
 			}
 
-			log.Info("connection test succeeded", "host", cfg.Database.Host, "port", cfg.Database.Port, "db", cfg.Database.Name)
+			log.Info("connection test succeeded", "db", cfg.Database.ActiveDatabaseName())
 			fmt.Println("connection successful")
 			return nil
 		},

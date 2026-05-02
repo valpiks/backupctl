@@ -57,12 +57,13 @@ Create a config file (do not commit real credentials):
 ```yaml
 database:
   type: postgres
-  host: localhost
-  port: 5432
-  user: postgres
-  password: postgres
-  name: testdb
-  sslmode: disable
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password: postgres
+    name: testdb
+    sslmode: disable
 
 backup:
   type: full

@@ -39,7 +39,7 @@ func newRestorCommand() *cobra.Command {
 				return err
 			}
 
-			restoreDB := cfg.Database.Name
+			restoreDB := cfg.Database.ActiveDatabaseName()
 			if targetDB != "" {
 				restoreDB = targetDB
 			}

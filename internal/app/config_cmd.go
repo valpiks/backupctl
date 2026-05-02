@@ -24,10 +24,10 @@ func newConfigCommand() *cobra.Command {
 			log.Info("config loaded", "path", configPath)
 
 			fmt.Printf("database type: %s\n", cfg.Database.Type)
-			fmt.Printf("database name: %s\n", cfg.Database.Name)
+			fmt.Printf("database name: %s\n", cfg.Database.ActiveDatabaseName())
 			fmt.Printf("storage path: %s\n", cfg.Storage.Path)
 
-			log.Info("config printed", "db", cfg.Database.Name, "storage_path", cfg.Storage.Path)
+			log.Info("config printed", "db", cfg.Database.ActiveDatabaseName(), "storage_path", cfg.Storage.Path)
 			return nil
 		},
 	}

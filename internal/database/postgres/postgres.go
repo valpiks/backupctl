@@ -21,19 +21,19 @@ func NewDriver(cfg config.DatabaseConfig) (*Driver, error) {
 		return nil, fmt.Errorf("unsupported database type for postgres driver: %s", cfg.Type)
 	}
 
-	if cfg.Host == "" {
+	if cfg.Postgres.Host == "" {
 		return nil, fmt.Errorf("database.host is required")
 	}
 
-	if cfg.Port == 0 {
+	if cfg.Postgres.Port == 0 {
 		return nil, fmt.Errorf("database.port is required")
 	}
 
-	if cfg.User == "" {
+	if cfg.Postgres.User == "" {
 		return nil, fmt.Errorf("database.user is required")
 	}
 
-	if cfg.Name == "" {
+	if cfg.Postgres.Name == "" {
 		return nil, fmt.Errorf("database.name is required")
 	}
 
@@ -44,16 +44,16 @@ func NewDriver(cfg config.DatabaseConfig) (*Driver, error) {
 
 func (d *Driver) Ping(ctx context.Context) error {
 	args := []string{
-		"-h", d.cfg.Host,
-		"-p", strconv.Itoa(d.cfg.Port),
-		"-U", d.cfg.User,
-		"-d", d.cfg.Name,
+		"-h", d.cfg.Postgres.Host,
+		"-p", strconv.Itoa(d.cfg.Postgres.Port),
+		"-U", d.cfg.Postgres.User,
+		"-d", d.cfg.Postgres.Name,
 		"-c", "select 1",
 	}
 
 	cmd := exec.CommandContext(ctx, "psql", args...)
 
-	cmd.Env = append(cmd.Environ(), "PGPASSWORD="+d.cfg.Password)
+	cmd.Env = append(cmd.Environ(), "PGPASSWORD="+d.cfg.Postgres.Password)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -71,10 +71,10 @@ func (d *Driver) Backup(ctx context.Context, opts database.BackupOptions) (io.Re
 	var stderr bytes.Buffer
 
 	args := []string{
-		"-h", d.cfg.Host,
-		"-p", strconv.Itoa(d.cfg.Port),
-		"-U", d.cfg.User,
-		"-d", d.cfg.Name,
+		"-h", d.cfg.Postgres.Host,
+		"-p", strconv.Itoa(d.cfg.Postgres.Port),
+		"-U", d.cfg.Postgres.User,
+		"-d", d.cfg.Postgres.Name,
 		"--format=plain",
 		"--no-owner",
 		"--no-privileges",
@@ -84,7 +84,7 @@ func (d *Driver) Backup(ctx context.Context, opts database.BackupOptions) (io.Re
 	cmd := exec.CommandContext(ctx, "pg_dump", args...)
 
 	cmd.Env = append([]string{}, cmd.Environ()...)
-	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Password)
+	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Postgres.Password)
 
 	cmd.Stderr = &stderr
 
@@ -121,20 +121,20 @@ func (c *commandReadCloser) Close() error {
 func (d *Driver) Restore(ctx context.Context, input io.Reader, opts database.RestoreOptions) error {
 	targetDB := opts.TargetDatabase
 	if targetDB == "" {
-		targetDB = d.cfg.Name
+		targetDB = d.cfg.Postgres.Name
 	}
 
 	args := []string{
-		"-h", d.cfg.Host,
-		"-p", strconv.Itoa(d.cfg.Port),
-		"-U", d.cfg.User,
+		"-h", d.cfg.Postgres.Host,
+		"-p", strconv.Itoa(d.cfg.Postgres.Port),
+		"-U", d.cfg.Postgres.User,
 		"-d", targetDB,
 	}
 
 	cmd := exec.CommandContext(ctx, "psql", args...)
 
 	cmd.Env = append([]string{}, cmd.Environ()...)
-	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Password)
+	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Postgres.Password)
 
 	cmd.Stdin = input
 

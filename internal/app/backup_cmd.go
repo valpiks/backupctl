@@ -48,11 +48,11 @@ func newBackupCommand() *cobra.Command {
 			service := backup.NewService(driver, storage, compressor)
 
 			log.Info("backup started",
-				"db", cfg.Database.Name,
+				"db", cfg.Database.ActiveDatabaseName(),
 				"type", cfg.Backup.Type,
 			)
 
-			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.Name, BackupType: cfg.Backup.Type})
+			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type})
 			if err != nil {
 				log.Error("backup failed", "error", err)
 				return err
