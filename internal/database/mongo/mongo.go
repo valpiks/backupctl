@@ -106,8 +106,9 @@ func (d *Driver) Restore(ctx context.Context, input io.Reader, opts database.Res
 
 	args := []string{
 		"--uri", d.cfg.Mongo.URI,
-		"--db", targetDB,
 		"--archive=-",
+		"--nsFrom", d.cfg.Mongo.Database + ".*",
+		"--nsTo", targetDB + ".*",
 	}
 
 	cmd := execCommandContext(ctx, "mongorestore", args...)

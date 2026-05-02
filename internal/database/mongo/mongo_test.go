@@ -124,12 +124,24 @@ func TestRestoreUsesExpectedCommandArgs(t *testing.T) {
 		{
 			name:     "uses configured database by default",
 			targetDB: "",
-			wantArgs: []string{"mongorestore", "--uri", "mongodb://localhost:27017", "--db", "app", "--archive=-"},
+			wantArgs: []string{
+				"mongorestore",
+				"--uri", "mongodb://localhost:27017",
+				"--archive=-",
+				"--nsFrom", "app.*",
+				"--nsTo", "app.*",
+			},
 		},
 		{
 			name:     "uses target database override",
 			targetDB: "restoredb",
-			wantArgs: []string{"mongorestore", "--uri", "mongodb://localhost:27017", "--db", "restoredb", "--archive=-"},
+			wantArgs: []string{
+				"mongorestore",
+				"--uri", "mongodb://localhost:27017",
+				"--archive=-",
+				"--nsFrom", "app.*",
+				"--nsTo", "restoredb.*",
+			},
 		},
 	}
 
