@@ -48,17 +48,19 @@ func newDoctorCommand() *cobra.Command {
 			}
 			fmt.Println("[OK] storage initialized")
 
-			if _, err := exec.LookPath("pg_dump"); err != nil {
-				fmt.Printf("[FAIL] pg_dump not found: %v\n", err)
-				return err
-			}
-			fmt.Println("[OK] pg_dump found")
+			dbTools := requiredDatabaseTools(cfg.Database.Type)
 
-			if _, err := exec.LookPath("psql"); err != nil {
-				fmt.Printf("[FAIL] psql not found: %v\n", err)
-				return err
+			if len(dbTools) == 0 {
+				return fmt.Errorf("unknown db type")
 			}
-			fmt.Println("[OK] psql found")
+
+			for _, tool := range dbTools {
+				if _, err := exec.LookPath(tool); err != nil {
+					fmt.Printf("[FAIL] %s not found: %v\n", tool, err)
+					return err
+				}
+				fmt.Printf("[OK] %s found\n", tool)
+			}
 
 			fmt.Println("doctor checks passed")
 			return nil
@@ -68,4 +70,15 @@ func newDoctorCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
 
 	return cmd
+}
+
+func requiredDatabaseTools(databaseType string) []string {
+	switch databaseType {
+	case "postgres":
+		return []string{"psql", "pg_dump"}
+	case "mongo":
+		return []string{"mongosh", "mongodump", "mongorestore"}
+	default:
+		return []string{}
+	}
 }
