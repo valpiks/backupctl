@@ -8,6 +8,8 @@ CLI utility for database backups and restore with pluggable database drivers.
 backupctl version
 ```
 
+Release builds inject the Git tag version automatically via GoReleaser.
+
 ## Features
 
 * Full database backups for PostgreSQL and MongoDB
@@ -30,6 +32,8 @@ git clone https://github.com/valpiks/backupctl.git
 cd backupctl
 go build -o backupctl ./cmd/backupctl
 ```
+
+Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.4.0`.
 
 ---
 
@@ -292,6 +296,28 @@ go test ./internal/integration -run TestMongoBackupRestoreSmoke -v
 ```
 
 The PostgreSQL and MongoDB smoke tests are skipped unless `BACKUPCTL_RUN_INTEGRATION=1` is set.
+
+---
+
+## Releases
+
+GitHub Releases are built automatically by GoReleaser when you push a version tag.
+
+Local release dry-run:
+
+```bash
+goreleaser release --snapshot --clean
+```
+
+Release flow:
+
+```bash
+git tag v0.4.0
+git push origin main
+git push origin v0.4.0
+```
+
+The workflow publishes archives and checksums to the GitHub Release page for that tag.
 
 ---
 

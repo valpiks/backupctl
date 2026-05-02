@@ -27,3 +27,4 @@ configs/config.local.yaml
 .vscode/
 .idea/
 .cache
+dist/
