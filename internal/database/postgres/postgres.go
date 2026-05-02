@@ -12,6 +12,8 @@ import (
 	database "github.com/valpiks/backupctl/internal/dbdriver"
 )
 
+var execCommandContext = exec.CommandContext
+
 type Driver struct {
 	cfg config.DatabaseConfig
 }
@@ -51,7 +53,7 @@ func (d *Driver) Ping(ctx context.Context) error {
 		"-c", "select 1",
 	}
 
-	cmd := exec.CommandContext(ctx, "psql", args...)
+	cmd := execCommandContext(ctx, "psql", args...)
 
 	cmd.Env = append(cmd.Environ(), "PGPASSWORD="+d.cfg.Postgres.Password)
 
@@ -81,7 +83,7 @@ func (d *Driver) Backup(ctx context.Context, opts database.BackupOptions) (io.Re
 		"--no-password",
 	}
 
-	cmd := exec.CommandContext(ctx, "pg_dump", args...)
+	cmd := execCommandContext(ctx, "pg_dump", args...)
 
 	cmd.Env = append([]string{}, cmd.Environ()...)
 	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Postgres.Password)
@@ -131,7 +133,7 @@ func (d *Driver) Restore(ctx context.Context, input io.Reader, opts database.Res
 		"-d", targetDB,
 	}
 
-	cmd := exec.CommandContext(ctx, "psql", args...)
+	cmd := execCommandContext(ctx, "psql", args...)
 
 	cmd.Env = append([]string{}, cmd.Environ()...)
 	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Postgres.Password)
