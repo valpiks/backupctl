@@ -1,0 +1,16 @@
+database:
+  type: mongo
+  mongo:
+    uri: mongodb://localhost:27017
+    database: app
+
+backup:
+  type: full
+  compression: gzip
+
+storage:
+  type: local
+  path: ./backups
+
+logging:
+  level: info

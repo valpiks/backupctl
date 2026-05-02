@@ -1,6 +1,6 @@
 # backupctl
 
-CLI utility for database backups and restore (PostgreSQL).
+CLI utility for database backups and restore with pluggable database drivers.
 
 ## Version
 
@@ -10,7 +10,7 @@ backupctl version
 
 ## Features
 
-* Full database backups using `pg_dump`
+* Full database backups for PostgreSQL and MongoDB
 * Streaming gzip compression (low memory usage)
 * Local file storage
 * Restore from backups
@@ -36,23 +36,35 @@ go build -o backupctl ./cmd/backupctl
 ## Requirements
 
 * Go 1.22+
-* PostgreSQL client tools:
+* Database tools for the selected driver
 
-  * `pg_dump`
-  * `psql`
-
-Check installation:
+PostgreSQL:
 
 ```bash
 pg_dump --version
 psql --version
 ```
 
+MongoDB:
+
+```bash
+mongosh --version
+mongodump --version
+mongorestore --version
+```
+
 ---
 
 ## Configuration
 
-Create a config file (do not commit real credentials):
+Create a config file and choose the active driver with `database.type`.
+
+Examples in the repository:
+
+* `configs/config.example.yaml` for PostgreSQL
+* `configs/config.mongo.example.yaml` for MongoDB
+
+PostgreSQL config:
 
 ```yaml
 database:
@@ -76,6 +88,36 @@ storage:
 logging:
   level: info
 ```
+
+MongoDB config:
+
+```yaml
+database:
+  type: mongo
+  mongo:
+    uri: mongodb://localhost:27017
+    database: app
+
+backup:
+  type: full
+  compression: gzip
+
+storage:
+  type: local
+  path: ./backups
+
+logging:
+  level: info
+```
+
+Config notes:
+
+* `database.type` selects the active driver
+* `database.postgres` is used only for `postgres`
+* `database.mongo` is used only for `mongo`
+* `backup.type` currently supports only `full`
+* `storage.type` currently supports only `local`
+* `backup.compression` is currently `gzip`
 
 ---
 
@@ -125,14 +167,19 @@ Checks:
 * database driver init
 * database connectivity
 * storage init
-* `pg_dump` and `psql` presence
+* required database tools for the active driver
+
+Driver-specific tool checks:
+
+* `postgres`: `pg_dump`, `psql`
+* `mongo`: `mongosh`, `mongodump`, `mongorestore`
 
 ---
 
 ### Restore
 
 ```bash
-./backupctl restore --file backups/backup.sql.gz
+./backupctl restore --file your_backup.sql.gz
 ```
 
 You will be asked for confirmation:
@@ -145,8 +192,8 @@ This may overwrite existing data. Continue? [y/N]:
 Skip confirmation:
 
 ```bash
-./backupctl restore --file backups/backup.sql.gz --yes
-./backupctl restore --file backups/backup.sql.gz --target-db restoredb
+./backupctl restore --file your_backup.sql.gz --yes
+./backupctl restore --file your_backup.sql.gz --target-db restoredb
 ```
 
 ---
@@ -174,16 +221,16 @@ Delete old backups and keep the latest 5:
 ./backupctl doctor
 
 # create backup
-./backupctl backup
+./backupctl backup -c configs/config.local.yaml
 
 # list backups
-./backupctl list --limit 10
+./backupctl list -c configs/config.local.yaml --limit 10
 
 # restore backup
-./backupctl restore --file backups/your_backup.sql.gz --target-db restoredb
+./backupctl restore -c configs/config.local.yaml --file your_backup.sql.gz --target-db restoredb
 
 # cleanup old backups
-./backupctl cleanup --keep-last 5 --dry-run
+./backupctl cleanup -c configs/config.local.yaml --keep-last 5 --dry-run
 ```
 
 ---
@@ -206,9 +253,10 @@ internal/logger      # logging
 ## Notes
 
 * Backup is streamed (no large memory usage)
-* Uses native PostgreSQL tools (`pg_dump`, `psql`)
-* Requires PostgreSQL client tools installed locally
-* Designed to be extended (MySQL, S3, scheduler, etc.)
+* PostgreSQL uses native tools `pg_dump` and `psql`
+* MongoDB uses native tools `mongosh`, `mongodump`, and `mongorestore`
+* Restore `--file` expects a backup file name from the configured storage path
+* Designed to be extended with more database and storage drivers
 
 ---
 
