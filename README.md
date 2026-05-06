@@ -1,6 +1,6 @@
 # backupctl
 
-CLI utility for database backups and restore with pluggable database drivers.
+CLI utility for database backups and restore with pluggable database and storage drivers.
 
 ## Version
 
@@ -14,7 +14,8 @@ Release builds inject the Git tag version automatically via GoReleaser.
 
 * Full database backups for PostgreSQL and MongoDB
 * Streaming gzip compression (low memory usage)
-* Local file storage
+* Local and S3-compatible storage
+* Streaming upload to S3 (no large memory usage)
 * Restore from backups
 * Backup metadata (JSON)
 * List backups (table / JSON output / limit)
@@ -27,13 +28,27 @@ Release builds inject the Git tag version automatically via GoReleaser.
 
 ## Installation
 
+Install from a released tag with Go:
+
+```bash
+go install github.com/valpiks/backupctl/cmd/backupctl@v0.5.0
+```
+
+Or install the latest released version:
+
+```bash
+go install github.com/valpiks/backupctl/cmd/backupctl@latest
+```
+
+Build from source:
+
 ```bash
 git clone https://github.com/valpiks/backupctl.git
 cd backupctl
 go build -o backupctl ./cmd/backupctl
 ```
 
-Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.4.0`.
+Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.5.0`.
 
 ---
 
@@ -61,14 +76,15 @@ mongorestore --version
 
 ## Configuration
 
-Create a config file and choose the active driver with `database.type`.
+Create a config file and choose the active driver with `database.type` and storage with `storage.type`.
 
 Examples in the repository:
 
-* `configs/config.example.yaml` for PostgreSQL
+* `configs/config.example.yaml` for PostgreSQL with local storage
 * `configs/config.mongo.example.yaml` for MongoDB
+* `configs/config.s3.example.yaml` for S3 storage
 
-PostgreSQL config:
+### Local storage (PostgreSQL)
 
 ```yaml
 database:
@@ -87,13 +103,14 @@ backup:
 
 storage:
   type: local
-  path: ./backups
+  local:
+    path: ./backups
 
 logging:
   level: info
 ```
 
-MongoDB config:
+### Local storage (MongoDB)
 
 ```yaml
 database:
@@ -108,20 +125,104 @@ backup:
 
 storage:
   type: local
-  path: ./backups
+  local:
+    path: ./backups
 
 logging:
   level: info
 ```
 
+### S3 storage (MinIO local)
+
+```yaml
+database:
+  type: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password: postgres
+    name: testdb
+    sslmode: disable
+
+backup:
+  type: full
+  compression: gzip
+
+storage:
+  type: s3
+  s3:
+    bucket: backupctl-test
+    region: us-east-1
+    prefix: backups/
+    endpoint: http://localhost:9000
+    force_path_style: true
+
+logging:
+  level: info
+```
+
+### S3 storage (AWS)
+
+```yaml
+storage:
+  type: s3
+  s3:
+    bucket: my-production-backups
+    region: eu-central-1
+    prefix: backupctl/prod/
+```
+
+### S3 storage (Cloudflare R2)
+
+```yaml
+storage:
+  type: s3
+  s3:
+    bucket: my-backups
+    region: auto
+    prefix: prod/
+    endpoint: https://xxx.r2.cloudflarestorage.com
+```
+
+### S3 storage (DigitalOcean Spaces)
+
+```yaml
+storage:
+  type: s3
+  s3:
+    bucket: my-backups
+    region: nyc3
+    prefix: prod/
+    endpoint: https://nyc3.digitaloceanspaces.com
+```
+
+### S3 storage (Yandex Cloud)
+
+```yaml
+storage:
+  type: s3
+  s3:
+    bucket: my-backups
+    region: ru-central1
+    prefix: prod/
+    endpoint: https://storage.yandexcloud.net
+```
+
 Config notes:
 
-* `database.type` selects the active driver
+* `database.type` selects the active driver (`postgres` or `mongo`)
 * `database.postgres` is used only for `postgres`
 * `database.mongo` is used only for `mongo`
 * `backup.type` currently supports only `full`
-* `storage.type` currently supports only `local`
-* `backup.compression` is currently `gzip`
+* `backup.compression` currently supports `gzip`
+* `storage.type` supports `local` and `s3`
+* `storage.local.path` is required for local storage
+* `storage.s3.endpoint` is optional (defaults to AWS S3)
+* `storage.s3.force_path_style` is needed for MinIO and self-hosted S3
+* `storage.s3.prefix` organizes backups in virtual folders
+* S3 credentials are read from `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables
+* For local MinIO, default credentials `minioadmin/minioadmin` are used
 
 ---
 
@@ -130,7 +231,7 @@ Config notes:
 ### Backup
 
 ```bash
-./backupctl backup -c configs/config.local.yaml
+./backupctl backup -c configs/config.example.yaml
 ```
 
 Creates:
@@ -140,6 +241,8 @@ backups/
   testdb_2026-04-27_16-02-07.sql.gz
   testdb_2026-04-27_16-02-07.metadata.json
 ```
+
+With S3 storage, backups are uploaded to the configured bucket and prefix.
 
 ---
 
@@ -170,7 +273,7 @@ Checks:
 * config loading
 * database driver init
 * database connectivity
-* storage init
+* storage init (including S3 bucket accessibility)
 * required database tools for the active driver
 
 Driver-specific tool checks:
@@ -224,17 +327,55 @@ Delete old backups and keep the latest 5:
 # check environment
 ./backupctl doctor
 
-# create backup
-./backupctl backup -c configs/config.local.yaml
+# create backup (local storage)
+./backupctl backup -c configs/config.example.yaml
+
+# create backup (S3 storage)
+./backupctl backup -c configs/config.s3.example.yaml
 
 # list backups
-./backupctl list -c configs/config.local.yaml --limit 10
+./backupctl list -c configs/config.example.yaml --limit 10
 
-# restore backup
-./backupctl restore -c configs/config.local.yaml --file your_backup.sql.gz --target-db restoredb
+# restore backup (local storage)
+./backupctl restore -c configs/config.example.yaml --file your_backup.sql.gz --target-db restoredb
+
+# restore backup (S3 storage)
+./backupctl restore -c configs/config.s3.example.yaml --file your_backup.sql.gz
 
 # cleanup old backups
-./backupctl cleanup -c configs/config.local.yaml --keep-last 5 --dry-run
+./backupctl cleanup -c configs/config.example.yaml --keep-last 5 --dry-run
+```
+
+---
+
+## S3 Storage Setup
+
+### Local development with MinIO
+
+```bash
+# Start MinIO
+docker run -d \
+  --name minio \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  minio/minio server /data --console-address ":9001"
+
+# Create bucket
+docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
+docker exec minio mc mb local/backupctl-test
+
+# Web console at http://localhost:9001
+```
+
+### Cloud providers
+
+For AWS, Cloudflare R2, DigitalOcean Spaces, or any S3-compatible storage, set credentials via environment variables:
+
+```bash
+export AWS_ACCESS_KEY_ID=your_access_key
+export AWS_SECRET_ACCESS_KEY=your_secret_key
 ```
 
 ---
@@ -242,14 +383,14 @@ Delete old backups and keep the latest 5:
 ## Project structure
 
 ```text
-cmd/backupctl        # entrypoint
-internal/app         # CLI commands
-internal/backup      # backup service
-internal/database    # DB drivers
-internal/storage     # storage layer
-internal/compression # compression logic
-internal/config      # config loading
-internal/logger      # logging
+cmd/backupctl          # entrypoint
+internal/app           # CLI commands
+internal/backup        # backup service
+internal/database      # DB drivers
+internal/storage       # storage layer (local, s3)
+internal/compression   # compression logic
+internal/config        # config loading
+internal/logger        # logging
 ```
 
 ---
@@ -257,10 +398,12 @@ internal/logger      # logging
 ## Notes
 
 * Backup is streamed (no large memory usage)
+* S3 upload uses streaming via multipart upload for large files
 * PostgreSQL uses native tools `pg_dump` and `psql`
 * MongoDB uses native tools `mongosh`, `mongodump`, and `mongorestore`
-* Restore `--file` expects a backup file name from the configured storage path
+* Restore `--file` expects a backup file name from the configured storage
 * Designed to be extended with more database and storage drivers
+* All S3-compatible providers are supported (AWS, MinIO, R2, DigitalOcean, Yandex Cloud, etc.)
 
 ---
 
@@ -274,7 +417,7 @@ Enable integration tests:
 export BACKUPCTL_RUN_INTEGRATION=1
 ```
 
-PostgreSQL smoke test:
+### PostgreSQL smoke test
 
 ```bash
 export BACKUPCTL_PG_HOST=localhost
@@ -286,7 +429,7 @@ export BACKUPCTL_PG_DB=backupctl_test
 go test ./internal/integration -run TestPostgresBackupRestoreSmoke -v
 ```
 
-MongoDB smoke test:
+### MongoDB smoke test
 
 ```bash
 export BACKUPCTL_MONGO_URI='mongodb://localhost:27017'
@@ -295,7 +438,19 @@ export BACKUPCTL_MONGO_DB='backupctl_test'
 go test ./internal/integration -run TestMongoBackupRestoreSmoke -v
 ```
 
-The PostgreSQL and MongoDB smoke tests are skipped unless `BACKUPCTL_RUN_INTEGRATION=1` is set.
+### S3 storage test
+
+Requires MinIO running on localhost:9000:
+
+```bash
+go test ./internal/storage/s3/ -v
+```
+
+Skip integration tests in CI:
+
+```bash
+go test -short ./...
+```
 
 ---
 
@@ -312,9 +467,9 @@ goreleaser release --snapshot --clean
 Release flow:
 
 ```bash
-git tag v0.4.0
+git tag v0.5.0
 git push origin main
-git push origin v0.4.0
+git push origin v0.5.0
 ```
 
 The workflow publishes archives and checksums to the GitHub Release page for that tag.
@@ -325,18 +480,17 @@ The workflow publishes archives and checksums to the GitHub Release page for tha
 
 * Do NOT commit real config files with passwords
 * Use `config.example.yaml` for sharing config structure
-* Use environment variables for production setups
+* Set credentials via environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+* Use `.env` files locally (added to `.gitignore`)
 
 ---
 
-## 6. Roadmap
-
-```md
 ## Roadmap
 
-- [ ] S3 / cloud storage support
+- [x] S3 / cloud storage support
 - [ ] scheduler (cron-based backups)
 - [ ] incremental backups
 - [ ] MySQL support
 - [ ] encryption for backups
-```
+- [ ] backup verification
+- [ ] S3 lifecycle policies integration

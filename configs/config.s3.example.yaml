@@ -4,8 +4,8 @@ database:
     host: localhost
     port: 5432
     user: postgres
-    password: your_password_here
-    name: your_db_name
+    password: postgres
+    name: testdb
     sslmode: disable
 
 backup:
@@ -13,9 +13,13 @@ backup:
   compression: gzip
 
 storage:
-  type: local
-  local:
-    path: ./backups
+  type: s3
+  s3:
+    bucket: backupctl-test
+    region: us-east-1
+    prefix: backups/
+    endpoint: http://localhost:9000
+    force_path_style: true
 
 logging:
   level: info

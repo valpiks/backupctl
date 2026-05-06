@@ -104,7 +104,7 @@ func (c *Config) Validate() error {
 	switch c.Storage.Type {
 	case "local":
 		if c.Storage.Local.Path == "" {
-			return fmt.Errorf("local.path is required")
+			return fmt.Errorf("storage.local.path is required for local storage")
 		}
 	case "s3":
 		if c.Storage.S3.Bucket == "" {

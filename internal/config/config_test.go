@@ -25,7 +25,8 @@ backup:
   compression: gzip
 storage:
   type: local
-  path: ./backups
+  local:
+    path: ./backups
 logging:
   level: info
 `)
@@ -66,7 +67,8 @@ backup:
   compression: gzip
 storage:
   type: local
-  path: ./backups
+  local:
+    path: ./backups
 logging:
   level: info
 `)
@@ -105,7 +107,8 @@ backup:
   compression: gzip
 storage:
   type: local
-  path: ./backups
+  local:
+    path: ./backups
 logging:
   level: info
 `)
@@ -133,7 +136,8 @@ backup:
   compression: gzip
 storage:
   type: local
-  path: ./backups
+  local:
+    path: ./backups
 logging:
   level: info
 `)

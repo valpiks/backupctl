@@ -9,13 +9,9 @@ backup:
   compression: gzip
 
 storage:
-  type: s3
-  s3:
-    bucket: backupctl-test
-    region: us-east-1
-    prefix: backups/
-    endpoint: http://localhost:9000
-    force_path_style: true
+  type: local
+  local:
+    path: ./backups
 
 logging:
   level: info
