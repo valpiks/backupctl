@@ -30,8 +30,8 @@ func integrationMongoConfig(t *testing.T) config.Config {
 			Compression: "gzip",
 		},
 		Storage: config.StorageConfig{
-			Type: "local",
-			Path: t.TempDir(),
+			Type:  "local",
+			Local: config.LocalStorageConfig{Path: t.TempDir()},
 		},
 		Logging: config.LoggingConfig{
 			Level: "info",

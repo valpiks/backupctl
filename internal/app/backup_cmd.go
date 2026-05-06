@@ -39,7 +39,7 @@ func newBackupCommand() *cobra.Command {
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
-				log.Error("storage initialization failed", "path", cfg.Storage.Path, "error", err)
+				log.Error("storage initialization failed", "error", err)
 				return err
 			}
 

@@ -39,15 +39,15 @@ func newListCommand() *cobra.Command {
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
-				log.Error("storage initialization failed", "path", cfg.Storage.Path, "error", err)
+				log.Error("storage initialization failed", "error", err)
 				return err
 			}
 
-			log.Info("listing backups", "path", cfg.Storage.Path, "show_files", showFiles, "json", jsonOutput)
+			log.Info("listing backups", "show_files", showFiles, "json", jsonOutput)
 
 			files, err := storage.List(ctx)
 			if err != nil {
-				log.Error("list backups failed", "path", cfg.Storage.Path, "error", err)
+				log.Error("list backups failed", "error", err)
 				return err
 			}
 

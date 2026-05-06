@@ -40,8 +40,21 @@ type BackupConfig struct {
 }
 
 type StorageConfig struct {
-	Type string `yaml:"type"`
+	Type  string             `yaml:"type"`
+	Local LocalStorageConfig `yaml:"local"`
+	S3    S3StorageConfig    `yaml:"s3"`
+}
+
+type LocalStorageConfig struct {
 	Path string `yaml:"path"`
+}
+
+type S3StorageConfig struct {
+	Bucket         string `yaml:"bucket"`
+	Region         string `yaml:"region"`
+	Prefix         string `yaml:"prefix"`
+	Endpoint       string `yaml:"endpoint"`
+	ForcePathStyle bool   `yaml:"force_path_style"`
 }
 
 type LoggingConfig struct {
@@ -88,8 +101,18 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("storage.type is required")
 	}
 
-	if c.Storage.Path == "" {
-		return fmt.Errorf("storage.path is required")
+	switch c.Storage.Type {
+	case "local":
+		if c.Storage.Local.Path == "" {
+			return fmt.Errorf("local.path is required")
+		}
+	case "s3":
+		if c.Storage.S3.Bucket == "" {
+			return fmt.Errorf("s3.bucket is required")
+		}
+		if c.Storage.S3.Region == "" {
+			return fmt.Errorf("s3.region is required (use 'us-east-1' for MinIO, 'auto' for R2)")
+		}
 	}
 
 	return nil
