@@ -3,12 +3,14 @@ package app
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/compression"
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
@@ -82,16 +84,34 @@ func newRestorCommand() *cobra.Command {
 			}
 			defer reader.Close()
 
-			compressor := compression.NewGzipCompressor()
-
-			decompressionReader, err := compressor.Decompress(reader)
+			var format string
+			var compressionFlag string
+			var metadata backup.Metadata
+			metadataData, err := storage.ReadMetadata(ctx, fileName)
 			if err != nil {
-				log.Error("decompress backup failed", "file", fileName, "error", err)
-				return err
+				format = detectFormatFromName(fileName)
+			} else {
+				if err := json.Unmarshal(metadataData, &metadata); err == nil {
+					format = metadata.Format
+					compressionFlag = metadata.Compression
+				} else {
+					format = detectFormatFromName(fileName)
+				}
 			}
-			defer decompressionReader.Close()
 
-			err = driver.Restore(ctx, decompressionReader, database.RestoreOptions{TargetDatabase: restoreDB})
+			if compressionFlag == "gzip" || strings.HasSuffix(fileName, ".sql.gz") {
+				compressor := compression.NewGzipCompressor()
+
+				decompressionReader, err := compressor.Decompress(reader)
+				if err != nil {
+					log.Error("decompress backup failed", "file", fileName, "error", err)
+					return err
+				}
+				defer decompressionReader.Close()
+				reader = decompressionReader
+			}
+
+			err = driver.Restore(ctx, reader, database.RestoreOptions{TargetDatabase: restoreDB, Format: format})
 			if err != nil {
 				log.Error("restore failed", "file", fileName, "db", restoreDB, "error", err)
 				return err
@@ -128,4 +148,15 @@ func confirmRestore(fileName string, dbName string) (bool, error) {
 	answer = strings.TrimSpace(strings.ToLower(answer))
 
 	return answer == "y" || answer == "yes", nil
+}
+
+func detectFormatFromName(fileName string) string {
+	switch {
+	case strings.HasSuffix(fileName, ".dump"):
+		return "custom"
+	case strings.HasSuffix(fileName, ".sql.gz"), strings.HasSuffix(fileName, ".sql"):
+		return "plain"
+	default:
+		return "plain"
+	}
 }

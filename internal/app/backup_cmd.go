@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,6 +16,10 @@ import (
 
 func newBackupCommand() *cobra.Command {
 	var configPath string
+	var schemaOnly bool
+	var dataOnly bool
+	var tables []string
+	var format string
 
 	cmd := &cobra.Command{
 		Use:   "backup",
@@ -22,6 +27,14 @@ func newBackupCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 			defer cancel()
+
+			if schemaOnly && dataOnly {
+				return fmt.Errorf("--schema-only and --data-only cannot be used together")
+			}
+
+			if format != "plain" && format != "custom" {
+				return fmt.Errorf("unsupported format: %s", format)
+			}
 
 			cfg, err := config.Load(configPath)
 			if err != nil {
@@ -52,7 +65,7 @@ func newBackupCommand() *cobra.Command {
 				"type", cfg.Backup.Type,
 			)
 
-			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type})
+			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type, SchemaOnly: schemaOnly, DataOnly: dataOnly, Tables: tables, Format: format})
 			if err != nil {
 				log.Error("backup failed", "error", err)
 				return err
@@ -70,6 +83,10 @@ func newBackupCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	cmd.Flags().BoolVar(&schemaOnly, "schema-only", false, "Backup schema only")
+	cmd.Flags().BoolVar(&dataOnly, "data-only", false, "Backup data only")
+	cmd.Flags().StringSliceVar(&tables, "tables", nil, "Comma-separed list of tables")
+	cmd.Flags().StringVar(&format, "format", "plain", "Backup format: plain or custom")
 
 	return cmd
 }
