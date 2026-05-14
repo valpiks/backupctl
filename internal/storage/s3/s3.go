@@ -250,6 +250,26 @@ func (s *Storage) Delete(ctx context.Context, name string) error {
 	return nil
 }
 
+func (s *Storage) ReadMetadata(ctx context.Context, name string) ([]byte, error) {
+	key := s.key(name)
+
+	output, err := s.client.GetObject(ctx, &s3client.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("download metadata: %w", err)
+	}
+	defer output.Body.Close()
+
+	buf := new(bytes.Buffer)
+	if _, err := io.Copy(buf, output.Body); err != nil {
+		return nil, fmt.Errorf("read metadata: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
 func (s *Storage) key(name string) string {
 	if s.prefix == "" {
 		return name

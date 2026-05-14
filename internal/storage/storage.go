@@ -15,4 +15,5 @@ type Storage interface {
 	Open(ctx context.Context, name string) (io.ReadCloser, error)
 	List(ctx context.Context) ([]BackupFile, error)
 	Delete(ctx context.Context, name string) error
+	ReadMetadata(ctx context.Context, name string) ([]byte, error)
 }

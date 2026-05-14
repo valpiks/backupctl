@@ -81,3 +81,12 @@ func (s *Storage) Delete(ctx context.Context, name string) error {
 	filepath := filepath.Join(s.path, name)
 	return os.Remove(filepath)
 }
+
+func (s *Storage) ReadMetadata(ctx context.Context, name string) ([]byte, error) {
+	filepath := filepath.Join(s.path, name)
+	data, err := os.ReadFile(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("read metadata file: %w", err)
+	}
+	return data, nil
+}
