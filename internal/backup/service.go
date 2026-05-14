@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -15,6 +16,10 @@ import (
 type Options struct {
 	DatabaseName string
 	BackupType   string
+	SchemaOnly   bool
+	DataOnly     bool
+	Tables       []string
+	Format       string
 }
 
 type Result struct {
@@ -43,15 +48,25 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 	startedAt := time.Now().UTC()
 
 	backupReader, err := s.db.Backup(ctx, database.BackupOptions{
-		Type: opts.BackupType,
+		Type:      opts.BackupType,
+		ShemaOnly: opts.SchemaOnly,
+		DataOnly:  opts.DataOnly,
+		Tables:    opts.Tables,
+		Format:    opts.Format,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	compressedReader := s.compressor.Compress(backupReader)
+	var compressedReader io.ReadCloser
+	if opts.Format == "plain" {
+		compressedReader = s.compressor.Compress(backupReader)
+		defer compressedReader.Close()
+	} else {
+		compressedReader = backupReader
+	}
 
-	fileName := buildBackupFileName(opts.DatabaseName, startedAt)
+	fileName := buildBackupFileName(opts.DatabaseName, startedAt, opts.Format)
 
 	if err := s.storage.Save(ctx, fileName, compressedReader); err != nil {
 		_ = backupReader.Close()
@@ -70,6 +85,11 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 
 	endedAt := time.Now().UTC()
 
+	compression := ""
+	if opts.Format == "plain" {
+		compression = "gzip"
+	}
+
 	metadata := Metadata{
 		DatabaseName: opts.DatabaseName,
 		BackupType:   opts.BackupType,
@@ -78,6 +98,11 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		StartedAt:    startedAt,
 		EndedAt:      endedAt,
 		Duration:     endedAt.Sub(startedAt).String(),
+		Format:       opts.Format,
+		SchemaOnly:   opts.SchemaOnly,
+		DataOnly:     opts.DataOnly,
+		Tabels:       opts.Tables,
+		Compression:  compression,
 	}
 
 	metadataData, err := json.MarshalIndent(metadata, "", "  ")
@@ -85,7 +110,12 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("marshal backup metadata %w", err)
 	}
 
-	metadataFileName := strings.TrimSuffix(fileName, ".sql.gz") + ".metadata.json"
+	metadataFileName := strings.TrimSuffix(fileName, ".sql.gz")
+	if !strings.HasSuffix(metadataFileName, ".dump") {
+		metadataFileName = strings.TrimSuffix(metadataFileName, ".sql") + ".metadata.json"
+	} else {
+		metadataFileName = strings.TrimSuffix(metadataFileName, ".dump") + ".metadata.json"
+	}
 
 	if err := s.storage.Save(ctx, metadataFileName, strings.NewReader(string(metadataData))); err != nil {
 		return nil, fmt.Errorf("save backup metadata %w", err)
@@ -98,10 +128,20 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 	}, nil
 }
 
-func buildBackupFileName(databaseName string, t time.Time) string {
-	return fmt.Sprintf(
-		"%s_%s.sql.gz",
+func buildBackupFileName(databaseName string, t time.Time, format string) string {
+	base := fmt.Sprintf(
+		"%s_%s",
 		databaseName,
 		t.Format("2006-01-02_15-04-05"),
 	)
+
+	switch format {
+	case "plain":
+		return base + ".sql.gz"
+	case "custom":
+		return base + ".dump"
+	default:
+		return base + ".backup"
+	}
+
 }

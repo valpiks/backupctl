@@ -5,7 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -39,6 +39,9 @@ func (d *fakeDriver) Ping(ctx context.Context) error {
 func (d *fakeDriver) Backup(ctx context.Context, opts database.BackupOptions) (io.ReadCloser, error) {
 	if d.backupErr != nil {
 		return nil, d.backupErr
+	}
+	if d.data == "" {
+		return nil, fmt.Errorf("no data set for driver")
 	}
 	return &fakeReadCloser{
 		Reader:   strings.NewReader(d.data),
@@ -98,7 +101,15 @@ func (s *fakeStorage) Delete(ctx context.Context, name string) error {
 	return nil
 }
 
-func TestSerivice_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
+func (s *fakeStorage) ReadMetadata(ctx context.Context, name string) ([]byte, error) {
+	b, ok := s.files[name]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return b, nil
+}
+
+func TestService_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
 	driver := &fakeDriver{
 		data: "CREATE TABLE users (id int);",
 	}
@@ -110,6 +121,7 @@ func TestSerivice_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
 	result, err := service.Run(context.Background(), Options{
 		DatabaseName: "testdb",
 		BackupType:   "full",
+		Format:       "plain",
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -178,7 +190,7 @@ func TestService_Run_ReturnsErrorWhenStorageSaveFails(t *testing.T) {
 	}
 
 	st := newFakeStorage()
-	st.saveErr = errors.New("save failed")
+	st.saveErr = os.ErrNotExist
 
 	compressor := compression.NewGzipCompressor()
 	service := NewService(driver, st, compressor)
@@ -186,6 +198,7 @@ func TestService_Run_ReturnsErrorWhenStorageSaveFails(t *testing.T) {
 	_, err := service.Run(context.Background(), Options{
 		DatabaseName: "testdb",
 		BackupType:   "full",
+		Format:       "plain",
 	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -195,7 +208,7 @@ func TestService_Run_ReturnsErrorWhenStorageSaveFails(t *testing.T) {
 func TestService_Run_ReturnsErrorWhenBackupRenderCloseFails(t *testing.T) {
 	driver := &fakeDriver{
 		data:     "SELECT 1;",
-		closeErr: errors.New("close failed"),
+		closeErr: os.ErrNotExist,
 	}
 
 	st := newFakeStorage()
@@ -205,8 +218,140 @@ func TestService_Run_ReturnsErrorWhenBackupRenderCloseFails(t *testing.T) {
 	_, err := service.Run(context.Background(), Options{
 		DatabaseName: "testdb",
 		BackupType:   "full",
+		Format:       "plain",
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+}
+
+func TestService_Run_SavesMetadataWithFormatAndMode(t *testing.T) {
+	driverPlain := &fakeDriver{
+		data: "SELECT 1;",
+	}
+
+	driverCustom := &fakeDriver{
+		data: "PGDUMP BINARY      ",
+	}
+
+	compressor := compression.NewGzipCompressor()
+
+	// Тест для plain формат с schema-only
+	stPlain := newFakeStorage()
+	servicePlain := NewService(driverPlain, stPlain, compressor)
+	resultPlain, err := servicePlain.Run(context.Background(), Options{
+		DatabaseName: "testdb",
+		BackupType:   "full",
+		SchemaOnly:   true,
+		Format:       "plain",
+	})
+	if err != nil {
+		t.Fatalf("Run(plain schema-only) error = %v", err)
+	}
+
+	metadataPlainFile := strings.TrimSuffix(resultPlain.FileName, ".sql.gz") + ".metadata.json"
+	metadataPlainData, ok := stPlain.files[metadataPlainFile]
+	if !ok {
+		t.Fatalf("metadata file %q was not saved", metadataPlainFile)
+	}
+
+	var metadataPlain Metadata
+	if err := json.Unmarshal(metadataPlainData, &metadataPlain); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+
+	if metadataPlain.Format != "plain" {
+		t.Fatalf("metadata format = %q, want plain", metadataPlain.Format)
+	}
+
+	if !metadataPlain.SchemaOnly {
+		t.Fatalf("metadata schema_only should be true")
+	}
+
+	if metadataPlain.Compression != "gzip" {
+		t.Fatalf("metadata compression = %q, want gzip (plain format is compressed)", metadataPlain.Compression)
+	}
+
+	// Тест для custom формат - используем другой сервис с другим драйвером
+	stCustom := newFakeStorage()
+	serviceCustom := NewService(driverCustom, stCustom, compressor)
+	resultCustom, err := serviceCustom.Run(context.Background(), Options{
+		DatabaseName: "testdb",
+		BackupType:   "full",
+		Format:       "custom",
+	})
+	if err != nil {
+		t.Logf("custom backup result: %+v", resultCustom)
+		t.Logf("custom backup error: %v", err)
+		t.Fatalf("Run(custom) error = %v", err)
+	}
+
+	metadataCustomFile := strings.TrimSuffix(resultCustom.FileName, ".dump") + ".metadata.json"
+	t.Logf("custom filename: %s", resultCustom.FileName)
+	t.Logf("metadata filename: %s", metadataCustomFile)
+	metadataCustomData, ok := stCustom.files[metadataCustomFile]
+	if !ok {
+		t.Fatalf("metadata file %q was not saved", metadataCustomFile)
+	}
+
+	var metadataCustom Metadata
+	if err := json.Unmarshal(metadataCustomData, &metadataCustom); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+
+	if metadataCustom.Format != "custom" {
+		t.Fatalf("metadata format = %q, want custom", metadataCustom.Format)
+	}
+
+	// Custom формат не должен быть сжат (empty compression)
+	if metadataCustom.Compression != "" {
+		t.Fatalf("metadata compression = %q, want empty (custom format is not compressed)", metadataCustom.Compression)
+	}
+}
+
+func TestService_Run_SavesTablesList(t *testing.T) {
+	driver := &fakeDriver{
+		data: "SELECT 1;",
+	}
+
+	st := newFakeStorage()
+	compressor := compression.NewGzipCompressor()
+	service := NewService(driver, st, compressor)
+
+	result, err := service.Run(context.Background(), Options{
+		DatabaseName: "testdb",
+		BackupType:   "full",
+		Tables:       []string{"users", "orders"},
+		Format:       "plain",
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	metadataFile := strings.TrimSuffix(result.FileName, ".sql.gz") + ".metadata.json"
+	metadataData, ok := st.files[metadataFile]
+	if !ok {
+		t.Fatalf("metadata file %q was not saved", metadataFile)
+	}
+
+	var metadata Metadata
+	if err := json.Unmarshal(metadataData, &metadata); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+
+	if !stringsEqual(metadata.Tabels, []string{"users", "orders"}) {
+		t.Fatalf("metadata tables = %v, want [users orders]", metadata.Tabels)
+	}
+}
+
+func stringsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

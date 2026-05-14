@@ -11,7 +11,7 @@ func NewGzipCompressor() *GzipCompressor {
 	return &GzipCompressor{}
 }
 
-func (c *GzipCompressor) Compress(input io.Reader) io.Reader {
+func (c *GzipCompressor) Compress(input io.Reader) io.ReadCloser {
 	pr, pw := io.Pipe()
 
 	go func() {
