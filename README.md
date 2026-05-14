@@ -13,11 +13,18 @@ Release builds inject the Git tag version automatically via GoReleaser.
 ## Features
 
 * Full database backups for PostgreSQL and MongoDB
+* Multiple backup modes and formats for PostgreSQL:
+  - Full backup with all data
+  - Schema-only backup (`--schema-only`)
+  - Data-only backup (`--data-only`)
+  - Select specific tables (`--tables`)
+  - Plain format (`.sql.gz`) - text-based, human-readable
+  - Custom format (`.dump`) - optimized for restore
 * Streaming gzip compression (low memory usage)
 * Local and S3-compatible storage
 * Streaming upload to S3 (no large memory usage)
-* Restore from backups
-* Backup metadata (JSON)
+* Restore from backups (auto-detects format from metadata or filename)
+* Backup metadata (JSON with format, mode, tables, compression info)
 * List backups (table / JSON output / limit)
 * Backup cleanup with retention and dry-run preview
 * Environment checks with `doctor`
@@ -31,7 +38,7 @@ Release builds inject the Git tag version automatically via GoReleaser.
 Install from a released tag with Go:
 
 ```bash
-go install github.com/valpiks/backupctl/cmd/backupctl@v0.5.0
+go install github.com/valpiks/backupctl/cmd/backupctl@v0.6.0
 ```
 
 Or install the latest released version:
@@ -48,7 +55,7 @@ cd backupctl
 go build -o backupctl ./cmd/backupctl
 ```
 
-Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.5.0`.
+Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.6.0`.
 
 ---
 
@@ -62,6 +69,7 @@ PostgreSQL:
 ```bash
 pg_dump --version
 psql --version
+pg_restore --version
 ```
 
 MongoDB:
@@ -79,7 +87,6 @@ mongorestore --version
 Create a config file and choose the active driver with `database.type` and storage with `storage.type`.
 
 Examples in the repository:
-
 * `configs/config.example.yaml` for PostgreSQL with local storage
 * `configs/config.mongo.example.yaml` for MongoDB
 * `configs/config.s3.example.yaml` for S3 storage
@@ -238,8 +245,47 @@ Creates:
 
 ```text
 backups/
-  testdb_2026-04-27_16-02-07.sql.gz
-  testdb_2026-04-27_16-02-07.metadata.json
+  testdb_2026-05-14_12-00-00.sql.gz        # plain format backup
+  testdb_2026-05-14_12-00-00.dump           # custom format backup
+  testdb_2026-05-14_12-00-00.metadata.json  # backup metadata
+```
+
+#### Backup modes (PostgreSQL)
+
+**Full backup (default):**
+
+```bash
+./backupctl backup -c configs/config.example.yaml
+```
+
+**Schema-only backup:**
+
+```bash
+./backupctl backup --schema-only -c configs/config.example.yaml
+```
+
+**Data-only backup:**
+
+```bash
+./backupctl backup --data-only -c configs/config.example.yaml
+```
+
+**Backup specific tables:**
+
+```bash
+./backupctl backup --tables users,orders -c configs/config.example.yaml
+```
+
+**Plain format backup (.sql.gz):**
+
+```bash
+./backupctl backup --format plain -c configs/config.example.yaml
+```
+
+**Custom format backup (.dump):**
+
+```bash
+./backupctl backup --format custom -c configs/config.example.yaml
 ```
 
 With S3 storage, backups are uploaded to the configured bucket and prefix.
@@ -278,7 +324,7 @@ Checks:
 
 Driver-specific tool checks:
 
-* `postgres`: `pg_dump`, `psql`
+* `postgres`: `pg_dump`, `psql`, `pg_restore`
 * `mongo`: `mongosh`, `mongodump`, `mongorestore`
 
 ---
@@ -286,7 +332,7 @@ Driver-specific tool checks:
 ### Restore
 
 ```bash
-./backupctl restore --file your_backup.sql.gz
+./backupctl restore --file your_backup.sql.gz -c configs/config.example.yaml
 ```
 
 You will be asked for confirmation:
@@ -302,6 +348,14 @@ Skip confirmation:
 ./backupctl restore --file your_backup.sql.gz --yes
 ./backupctl restore --file your_backup.sql.gz --target-db restoredb
 ```
+
+The restore command auto-detects the backup format from:
+1. Metadata file (preferred)
+2. File extension (fallback)
+
+Supported file extensions:
+* `.sql.gz` or `.sql` → plain format
+* `.dump` → custom format
 
 ---
 
@@ -327,20 +381,20 @@ Delete old backups and keep the latest 5:
 # check environment
 ./backupctl doctor
 
-# create backup (local storage)
-./backupctl backup -c configs/config.example.yaml
+# create full backup (plain format)
+./backupctl backup --format plain -c configs/config.example.yaml
 
-# create backup (S3 storage)
-./backupctl backup -c configs/config.s3.example.yaml
+# create schema-only backup for specific tables (custom format)
+./backupctl backup --schema-only --tables users,orders --format custom -c configs/config.example.yaml
 
 # list backups
 ./backupctl list -c configs/config.example.yaml --limit 10
 
-# restore backup (local storage)
-./backupctl restore -c configs/config.example.yaml --file your_backup.sql.gz --target-db restoredb
+# restore backup
+./backupctl restore --file testdb_2026-05-14_12-00-00.sql.gz -c configs/config.example.yaml
 
-# restore backup (S3 storage)
-./backupctl restore -c configs/config.s3.example.yaml --file your_backup.sql.gz
+# restore backup to different database
+./backupctl restore --file testdb_2026-05-14_12-00-00.dump --target-db restoredb --yes -c configs/config.example.yaml
 
 # cleanup old backups
 ./backupctl cleanup -c configs/config.example.yaml --keep-last 5 --dry-run
@@ -399,10 +453,12 @@ internal/logger        # logging
 
 * Backup is streamed (no large memory usage)
 * S3 upload uses streaming via multipart upload for large files
-* PostgreSQL uses native tools `pg_dump` and `psql`
+* PostgreSQL uses native tools `pg_dump`, `psql`, and `pg_restore`
 * MongoDB uses native tools `mongosh`, `mongodump`, and `mongorestore`
-* Restore `--file` expects a backup file name from the configured storage
-* Designed to be extended with more database and storage drivers
+* Plain format is text-based and human-readable
+* Custom format is optimized for restore and storage
+* Restore auto-detects format from metadata or filename
+* Metadata contains: format, schema-only, data-only, tables, compression
 * All S3-compatible providers are supported (AWS, MinIO, R2, DigitalOcean, Yandex Cloud, etc.)
 
 ---
@@ -467,9 +523,9 @@ goreleaser release --snapshot --clean
 Release flow:
 
 ```bash
-git tag v0.5.0
+git tag v0.6.0
 git push origin main
-git push origin v0.5.0
+git push origin v0.6.0
 ```
 
 The workflow publishes archives and checksums to the GitHub Release page for that tag.
@@ -488,6 +544,7 @@ The workflow publishes archives and checksums to the GitHub Release page for tha
 ## Roadmap
 
 - [x] S3 / cloud storage support
+- [x] PostgreSQL multiple backup modes and formats
 - [ ] scheduler (cron-based backups)
 - [ ] incremental backups
 - [ ] MySQL support
