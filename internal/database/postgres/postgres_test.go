@@ -123,13 +123,16 @@ func TestRestoreUsesExpectedCommandArgs(t *testing.T) {
 	tests := []struct {
 		name     string
 		targetDB string
+		format   string
+		wantCmd  string
 		wantArgs []string
 	}{
 		{
 			name:     "uses configured database by default",
 			targetDB: "",
+			format:   "plain",
+			wantCmd:  "psql",
 			wantArgs: []string{
-				"psql",
 				"-h", "localhost",
 				"-p", "5432",
 				"-U", "postgres",
@@ -138,12 +141,15 @@ func TestRestoreUsesExpectedCommandArgs(t *testing.T) {
 		}, {
 			name:     "uses target database override",
 			targetDB: "restoredb",
+			format:   "custom",
+			wantCmd:  "pg_restore",
 			wantArgs: []string{
-				"psql",
 				"-h", "localhost",
 				"-p", "5432",
 				"-U", "postgres",
 				"-d", "restoredb",
+				"--clean",
+				"--if-exists",
 			},
 		},
 	}
@@ -155,19 +161,27 @@ func TestRestoreUsesExpectedCommandArgs(t *testing.T) {
 			cfg.Postgres.Name = "testdb"
 			driver := &Driver{cfg: cfg}
 
-			restoreExecCommandForTest(t)
 			argsFile := createCapturedArgsFile(t)
+			restoreExecCommandForTest(t)
 			execCommandContext = fakeExecCommandContext(t, argsFile)
 
 			if err := driver.Restore(context.Background(), strings.NewReader("archive"), database.RestoreOptions{
 				TargetDatabase: tt.targetDB,
+				Format:         tt.format,
 			}); err != nil {
 				t.Fatalf("Restore() error = %v", err)
 			}
 
-			gotArgs := readCapturedArgs(t, argsFile)
-			if !reflect.DeepEqual(gotArgs, tt.wantArgs) {
-				t.Fatalf("Restore() args = %v, want %v", gotArgs, tt.wantArgs)
+			gotCmd := readCapturedArgs(t, argsFile)
+			if len(gotCmd) == 0 {
+				t.Fatal("no command captured")
+			}
+			if gotCmd[0] != tt.wantCmd {
+				t.Fatalf("Restore() command = %q, want %q", gotCmd[0], tt.wantCmd)
+			}
+
+			if !reflect.DeepEqual(gotCmd[1:], tt.wantArgs) {
+				t.Fatalf("Restore() args = %v, want %v", gotCmd[1:], tt.wantArgs)
 			}
 		})
 	}

@@ -70,17 +70,19 @@ func (d *Driver) Backup(ctx context.Context, opts database.BackupOptions) (io.Re
 		return nil, fmt.Errorf("unsupported postgres backup type: %s", opts.Type)
 	}
 
+	if opts.ShemaOnly && opts.DataOnly {
+		return nil, fmt.Errorf("schema-only and data-only cannot be used together")
+	}
+
+	if len(opts.Tables) > 0 && opts.ShemaOnly {
+		return nil, fmt.Errorf("tables and schema-only cannot be combined safely")
+	}
+
 	var stderr bytes.Buffer
 
-	args := []string{
-		"-h", d.cfg.Postgres.Host,
-		"-p", strconv.Itoa(d.cfg.Postgres.Port),
-		"-U", d.cfg.Postgres.User,
-		"-d", d.cfg.Postgres.Name,
-		"--format=plain",
-		"--no-owner",
-		"--no-privileges",
-		"--no-password",
+	args, err := buildBackupArgs(d.cfg, opts)
+	if err != nil {
+		return nil, err
 	}
 
 	cmd := execCommandContext(ctx, "pg_dump", args...)
@@ -126,14 +128,17 @@ func (d *Driver) Restore(ctx context.Context, input io.Reader, opts database.Res
 		targetDB = d.cfg.Postgres.Name
 	}
 
-	args := []string{
-		"-h", d.cfg.Postgres.Host,
-		"-p", strconv.Itoa(d.cfg.Postgres.Port),
-		"-U", d.cfg.Postgres.User,
-		"-d", targetDB,
+	commandName, err := buildCommandNameForRestore(opts.Format)
+	if err != nil {
+		return err
 	}
 
-	cmd := execCommandContext(ctx, "psql", args...)
+	args, err := buildRestoreArgs(d.cfg, targetDB, opts)
+	if err != nil {
+		return err
+	}
+
+	cmd := execCommandContext(ctx, commandName, args...)
 
 	cmd.Env = append([]string{}, cmd.Environ()...)
 	cmd.Env = append(cmd.Env, "PGPASSWORD="+d.cfg.Postgres.Password)
@@ -146,4 +151,71 @@ func (d *Driver) Restore(ctx context.Context, input io.Reader, opts database.Res
 	}
 
 	return nil
+}
+
+func buildBackupArgs(cfg config.DatabaseConfig, opts database.BackupOptions) ([]string, error) {
+	args := []string{
+		"-h", cfg.Postgres.Host,
+		"-p", strconv.Itoa(cfg.Postgres.Port),
+		"-U", cfg.Postgres.User,
+		"-d", cfg.Postgres.Name,
+		"--no-owner",
+		"--no-privileges",
+		"--no-password",
+	}
+
+	switch opts.Format {
+	case "plain":
+		args = append(args, "--format=plain")
+	case "custom":
+		args = append(args, "--format=custom", "-Fc")
+	default:
+		return nil, fmt.Errorf("unsupported postgres format: %s", opts.Format)
+	}
+
+	if opts.ShemaOnly {
+		args = append(args, "--schema-only")
+	}
+
+	if opts.DataOnly {
+		args = append(args, "--data-only")
+	}
+
+	for _, table := range opts.Tables {
+		if table != "" {
+			args = append(args, "--table", table)
+		}
+	}
+
+	return args, nil
+}
+
+func buildRestoreArgs(cfg config.DatabaseConfig, targetDB string, opts database.RestoreOptions) ([]string, error) {
+	args := []string{
+		"-h", cfg.Postgres.Host,
+		"-p", strconv.Itoa(cfg.Postgres.Port),
+		"-U", cfg.Postgres.User,
+		"-d", targetDB,
+	}
+
+	if opts.Format != "custom" && opts.Format != "plain" {
+		return nil, fmt.Errorf("unsupported postgres format: %s", opts.Format)
+	}
+
+	if opts.Format == "custom" {
+		args = append(args, "--clean", "--if-exists")
+	}
+
+	return args, nil
+}
+
+func buildCommandNameForRestore(format string) (string, error) {
+	switch format {
+	case "plain":
+		return "psql", nil
+	case "custom":
+		return "pg_restore", nil
+	default:
+		return "", fmt.Errorf("unsupported postgres format: %s", format)
+	}
 }
