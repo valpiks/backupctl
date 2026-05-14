@@ -6,11 +6,16 @@ import (
 )
 
 type BackupOptions struct {
-	Type string
+	Type      string
+	ShemaOnly bool
+	DataOnly  bool
+	Tables    []string
+	Format    string
 }
 
 type RestoreOptions struct {
 	TargetDatabase string
+	Format         string
 }
 
 type Driver interface {
