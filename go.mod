@@ -21,5 +21,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 // indirect
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/robfig/cron/v3 v3.0.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 )

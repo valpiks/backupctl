@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -37,6 +38,8 @@ type MongoConfig struct {
 type BackupConfig struct {
 	Type        string `yaml:"type"`
 	Compression string `yaml:"compression"`
+
+	Scheduler *SchedulerConfig `yaml:"scheduler,omitempty"`
 }
 
 type StorageConfig struct {
@@ -55,6 +58,13 @@ type S3StorageConfig struct {
 	Prefix         string `yaml:"prefix"`
 	Endpoint       string `yaml:"endpoint"`
 	ForcePathStyle bool   `yaml:"force_path_style"`
+}
+
+type SchedulerConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Cron     string `yaml:"cron,omitempty"`
+	Interval string `yaml:"interval,omitempty"`
+	LogFile  string `yaml:"log_file,omitempty"`
 }
 
 type LoggingConfig struct {
@@ -95,6 +105,23 @@ func (c *Config) Validate() error {
 
 	if c.Backup.Type == "" {
 		return fmt.Errorf("backup.type is required")
+	}
+
+	scheduler := c.Backup.Scheduler
+	if scheduler != nil && scheduler.Enabled {
+		if scheduler.Interval == "" && scheduler.Cron == "" {
+			return fmt.Errorf("either scheduler.interval or scheduler.cron is required")
+		}
+
+		if scheduler.Interval != "" && scheduler.Cron != "" {
+			return fmt.Errorf("scheduler.interval and scheduler.cron cannot be used together")
+		}
+	}
+
+	if scheduler != nil && scheduler.Interval != "" {
+		if _, err := time.ParseDuration(scheduler.Interval); err != nil {
+			return fmt.Errorf("invalid scheduler.interval: %w", err)
+		}
 	}
 
 	if c.Storage.Type == "" {

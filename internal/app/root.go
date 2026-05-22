@@ -19,6 +19,9 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newRestorCommand())
 	rootCmd.AddCommand(newDoctorCommand())
 	rootCmd.AddCommand(newCleanupCommand())
+	rootCmd.AddCommand(newScheduleCommand())
+	rootCmd.AddCommand(newSchedulerCommand())
+	rootCmd.AddCommand(newJobsCommand())
 
 	return rootCmd
 }
