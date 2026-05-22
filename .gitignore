@@ -6,6 +6,7 @@ bin/
 
 # go
 vendor/
+.gocache/
 
 # macOS
 .DS_Store
@@ -28,3 +29,6 @@ configs/config.local.yaml
 .idea/
 .cache
 dist/
+
+# JOBS
+.backupctl

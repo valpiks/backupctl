@@ -1,0 +1,25 @@
+database:
+  type: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password: your_password_here
+    name: your_db_name
+    sslmode: disable
+
+backup:
+  type: full
+  compression: gzip
+  scheduler:
+    enabled: true
+    cron: "0 3 * * *"
+    log_file: ./logs/backupctl-scheduler.log
+
+storage:
+  type: local
+  local:
+    path: ./backups
+
+logging:
+  level: info

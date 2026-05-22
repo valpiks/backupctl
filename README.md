@@ -27,6 +27,9 @@ Release builds inject the Git tag version automatically via GoReleaser.
 * Backup metadata (JSON with format, mode, tables, compression info)
 * List backups (table / JSON output / limit)
 * Backup cleanup with retention and dry-run preview
+* Scheduled backups with cron or interval jobs
+* Scheduled job management (`jobs`, `jobs status`, `jobs delete`)
+* Console and file logging for scheduler runs
 * Environment checks with `doctor`
 * Safe restore with confirmation prompt
 * Restore into a specific target database
@@ -38,7 +41,7 @@ Release builds inject the Git tag version automatically via GoReleaser.
 Install from a released tag with Go:
 
 ```bash
-go install github.com/valpiks/backupctl/cmd/backupctl@v0.6.0
+go install github.com/valpiks/backupctl/cmd/backupctl@v0.7.0
 ```
 
 Or install the latest released version:
@@ -55,7 +58,7 @@ cd backupctl
 go build -o backupctl ./cmd/backupctl
 ```
 
-Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.6.0`.
+Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.7.0`.
 
 ---
 
@@ -90,6 +93,8 @@ Examples in the repository:
 * `configs/config.example.yaml` for PostgreSQL with local storage
 * `configs/config.mongo.example.yaml` for MongoDB
 * `configs/config.s3.example.yaml` for S3 storage
+* `configs/config.scheduler.cron.example.yaml` for scheduled cron backups
+* `configs/config.scheduler.interval.example.yaml` for scheduled interval backups
 
 ### Local storage (PostgreSQL)
 
@@ -115,6 +120,32 @@ storage:
 
 logging:
   level: info
+```
+
+### Scheduled backups
+
+Cron schedule:
+
+```yaml
+backup:
+  type: full
+  compression: gzip
+  scheduler:
+    enabled: true
+    cron: "0 3 * * *"
+    log_file: ./logs/backupctl-scheduler.log
+```
+
+Interval schedule:
+
+```yaml
+backup:
+  type: full
+  compression: gzip
+  scheduler:
+    enabled: true
+    interval: 24h
+    log_file: ./logs/backupctl-scheduler.log
 ```
 
 ### Local storage (MongoDB)
@@ -223,6 +254,10 @@ Config notes:
 * `database.mongo` is used only for `mongo`
 * `backup.type` currently supports only `full`
 * `backup.compression` currently supports `gzip`
+* `backup.scheduler.cron` uses standard 5-field cron expressions
+* `backup.scheduler.interval` uses Go durations such as `30m`, `6h`, or `24h`
+* `backup.scheduler.cron` and `backup.scheduler.interval` cannot be used together
+* `backup.scheduler.log_file` enables file logging for `scheduler run`
 * `storage.type` supports `local` and `s3`
 * `storage.local.path` is required for local storage
 * `storage.s3.endpoint` is optional (defaults to AWS S3)
@@ -375,6 +410,48 @@ Delete old backups and keep the latest 5:
 
 ---
 
+### Scheduled backups
+
+Create a cron-based scheduled job:
+
+```bash
+./backupctl schedule --cron "0 3 * * *" -c configs/config.scheduler.cron.example.yaml
+```
+
+Create an interval-based scheduled job:
+
+```bash
+./backupctl schedule --interval 24h -c configs/config.scheduler.interval.example.yaml
+```
+
+List scheduled jobs:
+
+```bash
+./backupctl jobs
+```
+
+Show one job:
+
+```bash
+./backupctl jobs status job_20260522_030000
+```
+
+Delete one job:
+
+```bash
+./backupctl jobs delete job_20260522_030000
+```
+
+Run the scheduler process:
+
+```bash
+./backupctl scheduler run -c configs/config.scheduler.interval.example.yaml
+```
+
+`schedule` only stores the job in `.backupctl/jobs.json`. The job runs only while `scheduler run` is alive. For production, run `scheduler run` under systemd, launchd, Docker, or another process supervisor.
+
+---
+
 ## Example workflow
 
 ```bash
@@ -398,6 +475,11 @@ Delete old backups and keep the latest 5:
 
 # cleanup old backups
 ./backupctl cleanup -c configs/config.example.yaml --keep-last 5 --dry-run
+
+# create and run scheduled backups
+./backupctl schedule --interval 24h -c configs/config.scheduler.interval.example.yaml
+./backupctl jobs
+./backupctl scheduler run -c configs/config.scheduler.interval.example.yaml
 ```
 
 ---
@@ -445,6 +527,7 @@ internal/storage       # storage layer (local, s3)
 internal/compression   # compression logic
 internal/config        # config loading
 internal/logger        # logging
+internal/scheduler     # scheduled jobs and scheduler execution
 ```
 
 ---
@@ -460,6 +543,8 @@ internal/logger        # logging
 * Restore auto-detects format from metadata or filename
 * Metadata contains: format, schema-only, data-only, tables, compression
 * All S3-compatible providers are supported (AWS, MinIO, R2, DigitalOcean, Yandex Cloud, etc.)
+* Scheduled jobs are stored in `.backupctl/jobs.json`
+* `scheduler run` must stay running for cron and interval jobs to execute
 
 ---
 
@@ -523,9 +608,9 @@ goreleaser release --snapshot --clean
 Release flow:
 
 ```bash
-git tag v0.6.0
+git tag v0.7.0
 git push origin main
-git push origin v0.6.0
+git push origin v0.7.0
 ```
 
 The workflow publishes archives and checksums to the GitHub Release page for that tag.
@@ -545,7 +630,7 @@ The workflow publishes archives and checksums to the GitHub Release page for tha
 
 - [x] S3 / cloud storage support
 - [x] PostgreSQL multiple backup modes and formats
-- [ ] scheduler (cron-based backups)
+- [ ] scheduler daemon mode (cron/interval jobs are available through `scheduler run`)
 - [ ] incremental backups
 - [ ] MySQL support
 - [ ] encryption for backups
