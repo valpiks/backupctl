@@ -201,6 +201,115 @@ func TestActiveDatabaseName(t *testing.T) {
 	}
 }
 
+func TestLoadSchedulerConfig(t *testing.T) {
+	t.Parallel()
+
+	configPath := writeTempConfig(t, `
+database:
+  type: postgres
+  postgres:
+    name: app
+backup:
+  type: full
+  compression: gzip
+  scheduler:
+    enabled: true
+    interval: 24h
+    log_file: ./logs/backupctl.log
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Backup.Scheduler == nil {
+		t.Fatal("Backup.Scheduler = nil")
+	}
+
+	if !cfg.Backup.Scheduler.Enabled {
+		t.Fatal("Backup.Scheduler.Enabled = false, want true")
+	}
+
+	if cfg.Backup.Scheduler.Interval != "24h" {
+		t.Fatalf("Backup.Scheduler.Interval = %q, want 24h", cfg.Backup.Scheduler.Interval)
+	}
+}
+
+func TestLoadSchedulerConfigValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		block   string
+		wantErr string
+	}{
+		{
+			name: "enabled without schedule",
+			block: `
+  scheduler:
+    enabled: true`,
+			wantErr: "either scheduler.interval or scheduler.cron is required",
+		},
+		{
+			name: "cron and interval together",
+			block: `
+  scheduler:
+    enabled: true
+    cron: "0 3 * * *"
+    interval: 24h`,
+			wantErr: "scheduler.interval and scheduler.cron cannot be used together",
+		},
+		{
+			name: "invalid interval",
+			block: `
+  scheduler:
+    enabled: true
+    interval: nope`,
+			wantErr: "invalid scheduler.interval",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			configPath := writeTempConfig(t, `
+database:
+  type: postgres
+  postgres:
+    name: app
+backup:
+  type: full
+  compression: gzip
+`+tt.block+`
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+			_, err := Load(configPath)
+			if err == nil {
+				t.Fatal("Load() error = nil, want validation error")
+			}
+
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Load() error = %v, want to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func writeTempConfig(t *testing.T, content string) string {
 	t.Helper()
 
