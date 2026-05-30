@@ -29,6 +29,7 @@ Release builds inject the Git tag version automatically via GoReleaser.
 * Backup cleanup with retention and dry-run preview
 * Scheduled backups with cron or interval jobs
 * Scheduled job management (`jobs`, `jobs status`, `jobs delete`)
+* Background scheduler service installation with systemd and launchd
 * Console and file logging for scheduler runs
 * Environment checks with `doctor`
 * Safe restore with confirmation prompt
@@ -448,7 +449,44 @@ Run the scheduler process:
 ./backupctl scheduler run -c configs/config.scheduler.interval.example.yaml
 ```
 
-`schedule` only stores the job in `.backupctl/jobs.json`. The job runs only while `scheduler run` is alive. For production, run `scheduler run` under systemd, launchd, Docker, or another process supervisor.
+`schedule` only stores the job in `.backupctl/jobs.json`. The job runs only while `scheduler run` is alive.
+
+Install the scheduler as a background service:
+
+```bash
+./backupctl service install --config configs/config.scheduler.interval.example.yaml
+```
+
+Check service status:
+
+```bash
+./backupctl service status
+```
+
+Uninstall the service:
+
+```bash
+./backupctl service uninstall
+```
+
+Use `--dry-run` to preview the generated service file without installing it:
+
+```bash
+./backupctl service install --dry-run --config configs/config.scheduler.interval.example.yaml
+```
+
+On macOS, `backupctl` installs a user-level launchd service in `~/Library/LaunchAgents` by default. System-level launchd services are not supported yet, so use `--user` explicitly when you want to make that scope clear.
+
+On Linux, `backupctl` installs a system-level systemd service in `/etc/systemd/system` by default. Use `--user` for a user-level systemd service in `~/.config/systemd/user`.
+
+Useful flags:
+
+* `--binary` sets the path to the `backupctl` binary used by the service
+* `--force` overwrites an existing service file
+* `--no-start` writes the service file without starting it
+* `--name` changes the service name from `backupctl-scheduler`
+
+For production, prefer `service install` or another process supervisor instead of leaving `scheduler run` attached to a terminal.
 
 ---
 
@@ -528,6 +566,7 @@ internal/compression   # compression logic
 internal/config        # config loading
 internal/logger        # logging
 internal/scheduler     # scheduled jobs and scheduler execution
+internal/service       # systemd and launchd service installation
 ```
 
 ---
@@ -545,6 +584,7 @@ internal/scheduler     # scheduled jobs and scheduler execution
 * All S3-compatible providers are supported (AWS, MinIO, R2, DigitalOcean, Yandex Cloud, etc.)
 * Scheduled jobs are stored in `.backupctl/jobs.json`
 * `scheduler run` must stay running for cron and interval jobs to execute
+* `service install` keeps `scheduler run` alive in the background through systemd or launchd
 
 ---
 
