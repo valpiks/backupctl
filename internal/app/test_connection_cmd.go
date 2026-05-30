@@ -9,6 +9,7 @@ import (
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/logger"
+	"github.com/valpiks/backupctl/internal/secrets"
 )
 
 func newTestCommand() *cobra.Command {
@@ -25,6 +26,7 @@ func newTestCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			knownSecrets := cfg.KnownSecrets()
 
 			log := logger.New(cfg.Logging.Level)
 			log.Info("config loaded", "path", configPath)
@@ -32,13 +34,13 @@ func newTestCommand() *cobra.Command {
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
-				log.Error("database driver initialization failed", "error", err)
-				return err
+				log.Error("database driver initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			if err := driver.Ping(ctx); err != nil {
-				log.Error("connection test failed", "db", cfg.Database.ActiveDatabaseName(), "error", err)
-				return err
+				log.Error("connection test failed", "db", cfg.Database.ActiveDatabaseName(), "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			log.Info("connection test succeeded", "db", cfg.Database.ActiveDatabaseName())

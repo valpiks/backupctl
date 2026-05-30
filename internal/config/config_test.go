@@ -391,6 +391,35 @@ func TestActiveDatabaseName(t *testing.T) {
 	}
 }
 
+func TestKnownSecrets(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Database: DatabaseConfig{
+			Type: "postgres",
+			Postgres: PostgresConfig{
+				Password: "postgres-secret",
+			},
+			Mongo: MongoConfig{
+				URI: "mongodb://user:mongo-secret@localhost:27017/app",
+			},
+		},
+	}
+
+	got := cfg.KnownSecrets()
+	want := []string{"postgres-secret"}
+
+	if len(got) != len(want) {
+		t.Fatalf("KnownSecrets() = %v, want %v", got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("KnownSecrets() = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestLoadSchedulerConfig(t *testing.T) {
 	t.Parallel()
 

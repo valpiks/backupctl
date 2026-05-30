@@ -35,15 +35,16 @@ func newCleanupCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			knownSecrets := cfg.KnownSecrets()
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
-				return err
+				return redactError(err, knownSecrets)
 			}
 
 			files, err := storage.List(ctx)
 			if err != nil {
-				return err
+				return redactError(err, knownSecrets)
 			}
 
 			var metadataList []backup.Metadata
@@ -55,18 +56,18 @@ func newCleanupCommand() *cobra.Command {
 
 				reader, err := storage.Open(ctx, file.Name)
 				if err != nil {
-					return err
+					return redactError(err, knownSecrets)
 				}
 
 				data, err := io.ReadAll(reader)
 				_ = reader.Close()
 				if err != nil {
-					return err
+					return redactError(err, knownSecrets)
 				}
 
 				var metadata backup.Metadata
 				if err := json.Unmarshal(data, &metadata); err != nil {
-					return fmt.Errorf("parse metadata %s: %w", file.Name, err)
+					return redactError(fmt.Errorf("parse metadata %s: %w", file.Name, err), knownSecrets)
 				}
 
 				metadataList = append(metadataList, metadata)
@@ -94,12 +95,12 @@ func newCleanupCommand() *cobra.Command {
 
 			for _, m := range metadataList {
 				if err := storage.Delete(ctx, m.FileName); err != nil {
-					return fmt.Errorf("delete backup %s: %w", m.FileName, err)
+					return redactError(fmt.Errorf("delete backup %s: %w", m.FileName, err), knownSecrets)
 				}
 
 				metaName := strings.TrimSuffix(m.FileName, ".sql.gz") + ".metadata.json"
 				if err := storage.Delete(ctx, metaName); err != nil {
-					return fmt.Errorf("delete metadata %s: %w", metaName, err)
+					return redactError(fmt.Errorf("delete metadata %s: %w", metaName, err), knownSecrets)
 				}
 			}
 

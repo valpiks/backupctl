@@ -11,6 +11,7 @@ import (
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/logger"
+	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -41,19 +42,21 @@ func newBackupCommand() *cobra.Command {
 				return err
 			}
 
+			knownSecrets := cfg.KnownSecrets()
+
 			log := logger.New(cfg.Logging.Level)
 			log.Info("config loaded", "path", configPath)
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
-				log.Error("database driver initialization failed", "error", err)
-				return err
+				log.Error("database driver initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
-				log.Error("storage initialization failed", "error", err)
-				return err
+				log.Error("storage initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			compressor := compression.NewGzipCompressor()
@@ -67,8 +70,8 @@ func newBackupCommand() *cobra.Command {
 
 			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type, SchemaOnly: schemaOnly, DataOnly: dataOnly, Tables: tables, Format: format})
 			if err != nil {
-				log.Error("backup failed", "error", err)
-				return err
+				log.Error("backup failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			duration := result.EndedAt.Sub(result.StartedAt)

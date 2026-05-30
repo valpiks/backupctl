@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
+	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -26,25 +27,26 @@ func newDoctorCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			knownSecrets := cfg.KnownSecrets()
 
 			fmt.Println("[OK] config loaded")
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
-				fmt.Printf("[FAIL] driver: %v\n", err)
-				return err
+				fmt.Printf("[FAIL] driver: %s\n", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 			fmt.Println("[OK] driver initialized")
 
 			if err := driver.Ping(ctx); err != nil {
-				fmt.Printf("[FAIL] database ping: %v\n", err)
-				return err
+				fmt.Printf("[FAIL] database ping: %s\n", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 			fmt.Println("[OK] database ping")
 
 			if _, err := storagefactory.NewStorage(cfg.Storage); err != nil {
-				fmt.Printf("[FAIL] storage: %v\n", err)
-				return err
+				fmt.Printf("[FAIL] storage: %s\n", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 			fmt.Println("[OK] storage initialized")
 

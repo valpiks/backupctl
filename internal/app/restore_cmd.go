@@ -16,6 +16,7 @@ import (
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	database "github.com/valpiks/backupctl/internal/dbdriver"
 	"github.com/valpiks/backupctl/internal/logger"
+	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -40,6 +41,8 @@ func newRestorCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			knownSecrets := cfg.KnownSecrets()
 
 			restoreDB := cfg.Database.ActiveDatabaseName()
 			if targetDB != "" {
@@ -67,20 +70,20 @@ func newRestorCommand() *cobra.Command {
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
-				log.Error("database driver initialization failed", "error", err)
-				return err
+				log.Error("database driver initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
-				log.Error("storage initialization failed", "error", err)
-				return err
+				log.Error("storage initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			reader, err := storage.Open(ctx, fileName)
 			if err != nil {
-				log.Error("open backup failed", "file", fileName, "error", err)
-				return err
+				log.Error("open backup failed", "file", fileName, "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 			defer reader.Close()
 
@@ -104,8 +107,8 @@ func newRestorCommand() *cobra.Command {
 
 				decompressionReader, err := compressor.Decompress(reader)
 				if err != nil {
-					log.Error("decompress backup failed", "file", fileName, "error", err)
-					return err
+					log.Error("decompress backup failed", "file", fileName, "error", secrets.Redact(err.Error(), knownSecrets))
+					return redactError(err, knownSecrets)
 				}
 				defer decompressionReader.Close()
 				reader = decompressionReader
@@ -113,8 +116,8 @@ func newRestorCommand() *cobra.Command {
 
 			err = driver.Restore(ctx, reader, database.RestoreOptions{TargetDatabase: restoreDB, Format: format})
 			if err != nil {
-				log.Error("restore failed", "file", fileName, "db", restoreDB, "error", err)
-				return err
+				log.Error("restore failed", "file", fileName, "db", restoreDB, "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			log.Info("restore finished", "file", fileName, "db", restoreDB)

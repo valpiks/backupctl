@@ -163,6 +163,16 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+func (c *Config) KnownSecrets() []string {
+	secrets := make([]string, 0, 2)
+
+	if c.Database.Postgres.Password != "" {
+		secrets = append(secrets, c.Database.Postgres.Password)
+	}
+
+	return secrets
+}
+
 func (d DatabaseConfig) ActiveDatabaseName() string {
 	switch d.Type {
 	case "postgres":

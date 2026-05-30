@@ -13,6 +13,7 @@ import (
 	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/config"
 	"github.com/valpiks/backupctl/internal/logger"
+	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -33,22 +34,23 @@ func newListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			knownSecrets := cfg.KnownSecrets()
 
 			log := logger.New(cfg.Logging.Level)
 			log.Info("config loaded", "path", configPath)
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
-				log.Error("storage initialization failed", "error", err)
-				return err
+				log.Error("storage initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			log.Info("listing backups", "show_files", showFiles, "json", jsonOutput)
 
 			files, err := storage.List(ctx)
 			if err != nil {
-				log.Error("list backups failed", "error", err)
-				return err
+				log.Error("list backups failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			if showFiles {
@@ -68,20 +70,20 @@ func newListCommand() *cobra.Command {
 
 				reader, err := storage.Open(ctx, file.Name)
 				if err != nil {
-					return err
+					return redactError(err, knownSecrets)
 				}
 
 				data, err := io.ReadAll(reader)
 				_ = reader.Close()
 				if err != nil {
-					log.Error("read metadata failed", "file", file.Name, "error", err)
-					return err
+					log.Error("read metadata failed", "file", file.Name, "error", secrets.Redact(err.Error(), knownSecrets))
+					return redactError(err, knownSecrets)
 				}
 
 				var metadata backup.Metadata
 				if err := json.Unmarshal(data, &metadata); err != nil {
-					log.Error("parse metadata failed", "file", file.Name, "error", err)
-					return fmt.Errorf("parse metadata %s: %w", file.Name, err)
+					log.Error("parse metadata failed", "file", file.Name, "error", secrets.Redact(err.Error(), knownSecrets))
+					return redactError(fmt.Errorf("parse metadata %s: %w", file.Name, err), knownSecrets)
 				}
 
 				metadataList = append(metadataList, metadata)
@@ -98,8 +100,8 @@ func newListCommand() *cobra.Command {
 			if jsonOutput {
 				data, err := json.MarshalIndent(metadataList, "", "  ")
 				if err != nil {
-					log.Error("marshal backups json failed", "error", err)
-					return err
+					log.Error("marshal backups json failed", "error", secrets.Redact(err.Error(), knownSecrets))
+					return redactError(err, knownSecrets)
 				}
 
 				fmt.Println(string(data))

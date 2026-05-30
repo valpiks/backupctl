@@ -12,6 +12,7 @@ import (
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/scheduler"
+	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -43,6 +44,8 @@ func newSchedulerRunCommand() *cobra.Command {
 				return err
 			}
 
+			knownSecrets := cfg.KnownSecrets()
+
 			log := logger.New(cfg.Logging.Level)
 
 			if cfg.Backup.Scheduler != nil && cfg.Backup.Scheduler.LogFile != "" {
@@ -57,12 +60,14 @@ func newSchedulerRunCommand() *cobra.Command {
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
-				return err
+				log.Error("database driver initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
 			if err != nil {
-				return err
+				log.Error("storage initialization failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			compressor := compression.NewGzipCompressor()
@@ -72,7 +77,8 @@ func newSchedulerRunCommand() *cobra.Command {
 			service := scheduler.NewService(store, backupService, log)
 
 			if err := service.RegisterCronJobs(ctx); err != nil {
-				return err
+				log.Error("register cron jobs failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			service.Start()
@@ -81,7 +87,8 @@ func newSchedulerRunCommand() *cobra.Command {
 			intervalScheduler := scheduler.NewIntervalScheduler(service, store)
 
 			if err := intervalScheduler.Start(ctx); err != nil {
-				return err
+				log.Error("interval scheduler failed", "error", secrets.Redact(err.Error(), knownSecrets))
+				return redactError(err, knownSecrets)
 			}
 
 			log.Info("scheduler process started")
