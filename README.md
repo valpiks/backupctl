@@ -416,12 +416,14 @@ Delete old backups and keep the latest 5:
 Create a cron-based scheduled job:
 
 ```bash
+export BACKUPCTL_POSTGRES_PASSWORD=your_password_here
 ./backupctl schedule --cron "0 3 * * *" -c configs/config.scheduler.cron.example.yaml
 ```
 
 Create an interval-based scheduled job:
 
 ```bash
+export BACKUPCTL_POSTGRES_PASSWORD=your_password_here
 ./backupctl schedule --interval 24h -c configs/config.scheduler.interval.example.yaml
 ```
 
@@ -661,8 +663,34 @@ The workflow publishes archives and checksums to the GitHub Release page for tha
 
 * Do NOT commit real config files with passwords
 * Use `config.example.yaml` for sharing config structure
-* Set credentials via environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+* Use `database.postgres.password_env` for PostgreSQL passwords
+* Use `database.mongo.uri_env` for MongoDB connection strings
+* Set S3 credentials via environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
 * Use `.env` files locally (added to `.gitignore`)
+
+PostgreSQL password from an environment variable:
+
+```yaml
+database:
+  type: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password_env: BACKUPCTL_POSTGRES_PASSWORD
+    name: app
+    sslmode: disable
+```
+
+MongoDB URI from an environment variable:
+
+```yaml
+database:
+  type: mongo
+  mongo:
+    uri_env: BACKUPCTL_MONGO_URI
+    database: app
+```
 
 ---
 

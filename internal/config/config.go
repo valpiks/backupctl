@@ -22,16 +22,18 @@ type DatabaseConfig struct {
 }
 
 type PostgresConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Name     string `yaml:"name"`
-	SSLMode  string `yaml:"sslmode"`
+	Host        string `yaml:"host"`
+	Port        int    `yaml:"port"`
+	User        string `yaml:"user"`
+	Password    string `yaml:"password"`
+	PasswordEnv string `yaml:"password_env"`
+	Name        string `yaml:"name"`
+	SSLMode     string `yaml:"sslmode"`
 }
 
 type MongoConfig struct {
 	URI      string `yaml:"uri"`
+	URIEnv   string `yaml:"uri_env"`
 	Database string `yaml:"database"`
 }
 
@@ -83,11 +85,27 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config %w", err)
 	}
 
+	if err := cfg.ResolveEnvSecrets(); err != nil {
+		return nil, fmt.Errorf("resolve env secrets %w", err)
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate config %w", err)
 	}
 
 	return &cfg, nil
+}
+
+func (c *Config) ResolveEnvSecrets() error {
+	if err := resolvePostgresEnvSecrets(&c.Database.Postgres); err != nil {
+		return err
+	}
+
+	if err := resolveMongoEnvSecrets(&c.Database.Mongo); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *Config) Validate() error {
@@ -154,4 +172,49 @@ func (d DatabaseConfig) ActiveDatabaseName() string {
 	default:
 		return ""
 	}
+}
+
+func resolvePostgresEnvSecrets(cfg *PostgresConfig) error {
+	if cfg.Password != "" && cfg.PasswordEnv != "" {
+		return fmt.Errorf("postgres.password and postgres.password_env cannot be used together")
+	}
+
+	if cfg.PasswordEnv == "" {
+		return nil
+	}
+
+	value, err := requireEnv(cfg.PasswordEnv)
+	if err != nil {
+		return fmt.Errorf("postgres.password_env: %w", err)
+	}
+
+	cfg.Password = value
+	return nil
+}
+
+func resolveMongoEnvSecrets(cfg *MongoConfig) error {
+	if cfg.URI != "" && cfg.URIEnv != "" {
+		return fmt.Errorf("mongo.uri and mongo.uri_env cannot be used together")
+	}
+
+	if cfg.URIEnv == "" {
+		return nil
+	}
+
+	value, err := requireEnv(cfg.URIEnv)
+	if err != nil {
+		return fmt.Errorf("mongo.uri_env: %w", err)
+	}
+
+	cfg.URI = value
+	return nil
+}
+
+func requireEnv(name string) (string, error) {
+	value, ok := os.LookupEnv(name)
+	if !ok || value == "" {
+		return "", fmt.Errorf("environment variable %s is not set", name)
+	}
+
+	return value, nil
 }

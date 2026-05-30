@@ -152,6 +152,196 @@ logging:
 	}
 }
 
+func TestLoadPostgresPasswordEnv(t *testing.T) {
+	t.Setenv("BACKUPCTL_POSTGRES_PASSWORD", "from-env")
+
+	configPath := writeTempConfig(t, `
+database:
+  type: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password_env: BACKUPCTL_POSTGRES_PASSWORD
+    name: app
+    sslmode: disable
+backup:
+  type: full
+  compression: gzip
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Database.Postgres.Password != "from-env" {
+		t.Fatalf("Postgres.Password = %q, want from-env", cfg.Database.Postgres.Password)
+	}
+}
+
+func TestLoadPostgresPasswordAndPasswordEnvConflict(t *testing.T) {
+	t.Setenv("BACKUPCTL_POSTGRES_PASSWORD", "from-env")
+
+	configPath := writeTempConfig(t, `
+database:
+  type: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password: direct
+    password_env: BACKUPCTL_POSTGRES_PASSWORD
+    name: app
+    sslmode: disable
+backup:
+  type: full
+  compression: gzip
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("Load() error = nil")
+	}
+
+	if !strings.Contains(err.Error(), "postgres.password and postgres.password_env cannot be used together") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func TestLoadPostgresPasswordEnvMissing(t *testing.T) {
+	configPath := writeTempConfig(t, `
+database:
+  type: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password_env: BACKUPCTL_MISSING_PASSWORD
+    name: app
+    sslmode: disable
+backup:
+  type: full
+  compression: gzip
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("Load() error = nil")
+	}
+
+	if !strings.Contains(err.Error(), "environment variable BACKUPCTL_MISSING_PASSWORD is not set") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func TestLoadMongoURIEnv(t *testing.T) {
+	t.Setenv("BACKUPCTL_MONGO_URI", "mongodb://env-host:27017")
+
+	configPath := writeTempConfig(t, `
+database:
+  type: mongo
+  mongo:
+    uri_env: BACKUPCTL_MONGO_URI
+    database: app
+backup:
+  type: full
+  compression: gzip
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Database.Mongo.URI != "mongodb://env-host:27017" {
+		t.Fatalf("Mongo.URI = %q, want mongodb://env-host:27017", cfg.Database.Mongo.URI)
+	}
+}
+
+func TestLoadMongoURIAndURIEnvConflict(t *testing.T) {
+	t.Setenv("BACKUPCTL_MONGO_URI", "mongodb://env-host:27017")
+
+	configPath := writeTempConfig(t, `
+database:
+  type: mongo
+  mongo:
+    uri: mongodb://localhost:27017
+    uri_env: BACKUPCTL_MONGO_URI
+    database: app
+backup:
+  type: full
+  compression: gzip
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("Load() error = nil")
+	}
+
+	if !strings.Contains(err.Error(), "mongo.uri and mongo.uri_env cannot be used together") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func TestLoadMongoURIEnvMissing(t *testing.T) {
+	configPath := writeTempConfig(t, `
+database:
+  type: mongo
+  mongo:
+    uri_env: BACKUPCTL_MISSING_MONGO_URI
+    database: app
+backup:
+  type: full
+  compression: gzip
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("Load() error = nil")
+	}
+
+	if !strings.Contains(err.Error(), "environment variable BACKUPCTL_MISSING_MONGO_URI is not set") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
 func TestActiveDatabaseName(t *testing.T) {
 	t.Parallel()
 
