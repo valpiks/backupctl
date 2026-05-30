@@ -21,6 +21,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newCleanupCommand())
 	rootCmd.AddCommand(newScheduleCommand())
 	rootCmd.AddCommand(newSchedulerCommand())
+	rootCmd.AddCommand(newServiceCommand())
 	rootCmd.AddCommand(newJobsCommand())
 
 	return rootCmd
