@@ -15,6 +15,7 @@ import (
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	database "github.com/valpiks/backupctl/internal/dbdriver"
+	"github.com/valpiks/backupctl/internal/encryption"
 	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
@@ -89,6 +90,7 @@ func newRestorCommand() *cobra.Command {
 
 			var format string
 			var compressionFlag string
+			encrypted := strings.HasSuffix(fileName, ".enc")
 			var metadata backup.Metadata
 			metadataData, err := storage.ReadMetadata(ctx, fileName)
 			if err != nil {
@@ -97,12 +99,30 @@ func newRestorCommand() *cobra.Command {
 				if err := json.Unmarshal(metadataData, &metadata); err == nil {
 					format = metadata.Format
 					compressionFlag = metadata.Compression
+					encrypted = metadata.Encryption != nil && metadata.Encryption.Enabled
 				} else {
 					format = detectFormatFromName(fileName)
 				}
 			}
 
-			if compressionFlag == "gzip" || strings.HasSuffix(fileName, ".sql.gz") {
+			if encrypted {
+				if !encryptionEnabled(cfg) {
+					return fmt.Errorf("backup is encrypted but backup.encryption is not enabled in config")
+				}
+
+				decryptor := encryption.NewAESGCMEncryptor()
+
+				decryptedReader, err := decryptor.Decrypt(reader, encryptionPassword(cfg))
+				if err != nil {
+					log.Error("decrypt backup failed", "file", fileName, "error", secrets.Redact(err.Error(), knownSecrets))
+					return redactError(err, knownSecrets)
+				}
+				defer decryptedReader.Close()
+				reader = decryptedReader
+			}
+
+			plainFileName := backupNameWithoutEncryptionSuffix(fileName)
+			if compressionFlag == "gzip" || strings.HasSuffix(plainFileName, ".sql.gz") {
 				compressor := compression.NewGzipCompressor()
 
 				decompressionReader, err := compressor.Decompress(reader)
@@ -154,6 +174,8 @@ func confirmRestore(fileName string, dbName string) (bool, error) {
 }
 
 func detectFormatFromName(fileName string) string {
+	fileName = backupNameWithoutEncryptionSuffix(fileName)
+
 	switch {
 	case strings.HasSuffix(fileName, ".dump"):
 		return "custom"
@@ -162,4 +184,8 @@ func detectFormatFromName(fileName string) string {
 	default:
 		return "plain"
 	}
+}
+
+func backupNameWithoutEncryptionSuffix(fileName string) string {
+	return strings.TrimSuffix(fileName, ".enc")
 }

@@ -9,17 +9,17 @@ import (
 
 func TestBackupCommand_ValidateFlags(t *testing.T) {
 	tests := []struct {
-		name        string
-		schemaOnly  bool
-		dataOnly    bool
-		format      string
-		wantErr     string
+		name       string
+		schemaOnly bool
+		dataOnly   bool
+		format     string
+		wantErr    string
 	}{
 		{
-			name:     "schema-only and data-only together should fail",
+			name:       "schema-only and data-only together should fail",
 			schemaOnly: true,
-			dataOnly:  true,
-			wantErr:   "cannot be used together",
+			dataOnly:   true,
+			wantErr:    "cannot be used together",
 		},
 		{
 			name:    "unsupported format should fail",
@@ -27,14 +27,14 @@ func TestBackupCommand_ValidateFlags(t *testing.T) {
 			wantErr: "unsupported format",
 		},
 		{
-			name:     "valid plain format",
-			format:   "plain",
-			wantErr:  "",
+			name:    "valid plain format",
+			format:  "plain",
+			wantErr: "",
 		},
 		{
-			name:     "valid custom format",
-			format:   "custom",
-			wantErr:  "",
+			name:    "valid custom format",
+			format:  "custom",
+			wantErr: "",
 		},
 	}
 

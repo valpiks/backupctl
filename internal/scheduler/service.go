@@ -11,10 +11,12 @@ import (
 )
 
 type Service struct {
-	cron    *cron.Cron
-	jobs    JobStore
-	service *backup.Service
-	logger  *slog.Logger
+	cron               *cron.Cron
+	jobs               JobStore
+	service            *backup.Service
+	logger             *slog.Logger
+	encryptionEnabled  bool
+	encryptionPassword string
 }
 
 func NewService(jobs JobStore, service *backup.Service, logger *slog.Logger) *Service {
@@ -24,6 +26,11 @@ func NewService(jobs JobStore, service *backup.Service, logger *slog.Logger) *Se
 		service: service,
 		logger:  logger,
 	}
+}
+
+func (s *Service) SetEncryption(enabled bool, password string) {
+	s.encryptionEnabled = enabled
+	s.encryptionPassword = password
 }
 
 func (s *Service) CreateJob(ctx context.Context, job *Job) error {
@@ -57,7 +64,13 @@ func (s *Service) RunJob(ctx context.Context, job *Job) error {
 
 	s.logger.Info("scheduled backup started", "id", job.ID, "database", job.DatabaseName)
 
-	result, err := s.service.Run(ctx, backup.Options{DatabaseName: job.DatabaseName, BackupType: job.BackupType, Format: job.Format})
+	result, err := s.service.Run(ctx, backup.Options{
+		DatabaseName:       job.DatabaseName,
+		BackupType:         job.BackupType,
+		Format:             job.Format,
+		EncryptionEnabled:  s.encryptionEnabled,
+		EncryptionPassword: s.encryptionPassword,
+	})
 
 	if err != nil {
 		job.Status = "failed"

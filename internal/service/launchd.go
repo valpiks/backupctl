@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -28,13 +29,20 @@ func renderLaunchdPlist(opts InstallOptions) string {
 		<string>--config</string>
 		<string>%s</string>
 	</array>
+	<key>WorkingDirectory</key>
+	<string>%s</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/opt/homebrew/sbin:/opt/homebrew/opt/libpq/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
 	<true/>
 </dict>
 </plist>
-`, html.EscapeString(label), html.EscapeString(opts.BinaryPath), html.EscapeString(opts.ConfigPath))
+`, html.EscapeString(label), html.EscapeString(opts.BinaryPath), html.EscapeString(opts.ConfigPath), html.EscapeString(opts.WorkDir))
 }
 
 func launchdLabel(opts InstallOptions) string {
@@ -58,7 +66,7 @@ func startLaunchdService(opts InstallOptions, path string) error {
 	domain := fmt.Sprintf("gui/%d", os.Getuid())
 	target := fmt.Sprintf("%s/%s", domain, label)
 
-	_ = runner.Run("launchctl", "bootout", target)
+	runLaunchdBootout(runner, target)
 
 	if err := runner.Run("launchctl", "bootstrap", domain, path); err != nil {
 		return fmt.Errorf("launchctl bootstrap: %w", err)
@@ -73,6 +81,15 @@ func startLaunchdService(opts InstallOptions, path string) error {
 	}
 
 	return nil
+}
+
+func runLaunchdBootout(runner CommandRunner, target string) {
+	switch runner.(type) {
+	case ExecRunner:
+		_ = exec.Command("launchctl", "bootout", target).Run()
+	default:
+		_ = runner.Run("launchctl", "bootout", target)
+	}
 }
 
 func statusLaunchdService(opts StatusOptions) error {

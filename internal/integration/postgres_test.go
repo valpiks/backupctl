@@ -131,7 +131,7 @@ func TestPostgresBackupRestoreSmoke(t *testing.T) {
 		t.Fatalf("NewStorage() error = %v", err)
 	}
 
-	service := backup.NewService(driver, storage, compression.NewGzipCompressor())
+	service := backup.NewService(driver, storage, compression.NewGzipCompressor(), nil)
 
 	result, err := service.Run(context.Background(), backup.Options{
 		DatabaseName: cfg.Database.Postgres.Name,

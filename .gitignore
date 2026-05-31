@@ -13,12 +13,16 @@ vendor/
 
 # logs
 *.log
+logs
 
 # backups
 backups/
 
 # env
 .env
+*.env
+backupctl.env
+!configs/backupctl.env.example
 
 # configs with secrets
 configs/config.yaml

@@ -11,9 +11,16 @@ type Metadata struct {
 	EndedAt      time.Time `json:"ended_at"`
 	Duration     string    `json:"duration"`
 
-	Format      string   `json:"format"`
-	SchemaOnly  bool     `json:"schema_only"`
-	DataOnly    bool     `json:"data_only"`
-	Tabels      []string `json:"tables,omitempty"`
-	Compression string   `json:"compression,omitempty"`
+	Format      string              `json:"format"`
+	SchemaOnly  bool                `json:"schema_only"`
+	DataOnly    bool                `json:"data_only"`
+	Tabels      []string            `json:"tables,omitempty"`
+	Compression string              `json:"compression,omitempty"`
+	Encryption  *EncryptionMetadata `json:"encryption,omitempty"`
+}
+
+type EncryptionMetadata struct {
+	Enabled   bool   `json:"enabled"`
+	Algorithm string `json:"algorithm"`
+	KDF       string `json:"kdf"`
 }

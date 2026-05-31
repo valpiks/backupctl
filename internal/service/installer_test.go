@@ -79,6 +79,7 @@ func TestRenderSystemd(t *testing.T) {
 	for _, want := range []string{
 		"ExecStart=/usr/local/bin/backupctl scheduler run --config /etc/backupctl/config.yaml",
 		"Restart=always",
+		"WorkingDirectory=",
 		"WantedBy=multi-user.target",
 	} {
 		if !strings.Contains(rendered.Content, want) {
@@ -106,7 +107,53 @@ func TestRenderLaunchd(t *testing.T) {
 		"<string>scheduler</string>",
 		"<string>run</string>",
 		"<string>/etc/backupctl/config.yaml</string>",
+		"<key>WorkingDirectory</key>",
+		"<key>EnvironmentVariables</key>",
+		"/opt/homebrew/opt/libpq/bin",
 		"<key>KeepAlive</key>",
+	} {
+		if !strings.Contains(rendered.Content, want) {
+			t.Fatalf("content does not contain %q:\n%s", want, rendered.Content)
+		}
+	}
+}
+
+func TestRenderLaunchdResolvesRelativePaths(t *testing.T) {
+	tmp := t.TempDir()
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldwd); err != nil {
+			t.Fatalf("Chdir() cleanup error = %v", err)
+		}
+	})
+
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("Chdir() error = %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+
+	rendered, err := Render("darwin", InstallOptions{
+		Name:       "backupctl-scheduler",
+		BinaryPath: "./backupctl",
+		ConfigPath: "configs/config.yaml",
+	})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"<string>" + filepath.Join(wd, "backupctl") + "</string>",
+		"<string>" + filepath.Join(wd, "configs", "config.yaml") + "</string>",
+		"<key>WorkingDirectory</key>",
+		"<string>" + wd + "</string>",
 	} {
 		if !strings.Contains(rendered.Content, want) {
 			t.Fatalf("content does not contain %q:\n%s", want, rendered.Content)

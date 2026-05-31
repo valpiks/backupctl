@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/service"
@@ -68,7 +69,7 @@ func newServiceInstallCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&configPath, "config", "configs/config.yaml", "Path to config file")
-	cmd.Flags().StringVar(&binaryPath, "binary", "/usr/local/bin/backupctl", "Path to backupctl binary")
+	cmd.Flags().StringVar(&binaryPath, "binary", defaultServiceBinaryPath(), "Path to backupctl binary")
 	cmd.Flags().StringVar(&name, "name", service.DefaultName, "Service name")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print service file without installing it")
 	cmd.Flags().BoolVar(&user, "user", false, "Install user-level service")
@@ -77,6 +78,15 @@ func newServiceInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&noStart, "no-start", false, "Install service file without starting it")
 
 	return cmd
+}
+
+func defaultServiceBinaryPath() string {
+	path, err := os.Executable()
+	if err != nil || path == "" {
+		return "/usr/local/bin/backupctl"
+	}
+
+	return path
 }
 
 func newServiceUninstallCommand() *cobra.Command {

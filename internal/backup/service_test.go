@@ -13,6 +13,7 @@ import (
 
 	"github.com/valpiks/backupctl/internal/compression"
 	database "github.com/valpiks/backupctl/internal/dbdriver"
+	"github.com/valpiks/backupctl/internal/encryption"
 	"github.com/valpiks/backupctl/internal/storage"
 )
 
@@ -116,7 +117,7 @@ func TestService_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
 
 	st := newFakeStorage()
 	compressor := compression.NewGzipCompressor()
-	service := NewService(driver, st, compressor)
+	service := NewService(driver, st, compressor, nil)
 
 	result, err := service.Run(context.Background(), Options{
 		DatabaseName: "testdb",
@@ -184,6 +185,89 @@ func TestService_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
 	}
 }
 
+func TestService_Run_SavesEncryptedBackupAndMetadata(t *testing.T) {
+	driver := &fakeDriver{
+		data: "CREATE TABLE users (id int);",
+	}
+
+	st := newFakeStorage()
+	compressor := compression.NewGzipCompressor()
+	encryptor := encryption.NewAESGCMEncryptor()
+	service := NewService(driver, st, compressor, encryptor)
+
+	result, err := service.Run(context.Background(), Options{
+		DatabaseName:       "testdb",
+		BackupType:         "full",
+		Format:             "plain",
+		EncryptionEnabled:  true,
+		EncryptionPassword: "secret",
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if !strings.HasSuffix(result.FileName, ".sql.gz.enc") {
+		t.Fatalf("unexpected backup file name: %s", result.FileName)
+	}
+
+	backupData, ok := st.files[result.FileName]
+	if !ok {
+		t.Fatalf("backup file %q was not saved", result.FileName)
+	}
+
+	decrypted, err := encryptor.Decrypt(bytes.NewReader(backupData), "secret")
+	if err != nil {
+		t.Fatalf("Decrypt() error = %v", err)
+	}
+	defer decrypted.Close()
+
+	gz, err := gzip.NewReader(decrypted)
+	if err != nil {
+		t.Fatalf("gzip reader: %v", err)
+	}
+	defer gz.Close()
+
+	sqlData, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("read gzip data: %v", err)
+	}
+
+	if string(sqlData) != "CREATE TABLE users (id int);" {
+		t.Fatalf("unexpected backup contents: %q", string(sqlData))
+	}
+
+	metadataFile := strings.TrimSuffix(result.FileName, ".sql.gz.enc") + ".metadata.json"
+	metadataData, ok := st.files[metadataFile]
+	if !ok {
+		t.Fatalf("metadata file %q was not saved", metadataFile)
+	}
+
+	var meta Metadata
+	if err := json.Unmarshal(metadataData, &meta); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+
+	if meta.FileName != result.FileName {
+		t.Fatalf("metadata file_name = %q, want %q", meta.FileName, result.FileName)
+	}
+
+	if meta.Encryption == nil {
+		t.Fatal("metadata encryption = nil")
+	}
+
+	if !meta.Encryption.Enabled {
+		t.Fatal("metadata encryption enabled = false")
+	}
+
+	if meta.Encryption.Algorithm != "AES-256-GCM" {
+		t.Fatalf("metadata encryption algorithm = %q", meta.Encryption.Algorithm)
+	}
+
+	if meta.Encryption.KDF != "argon2id" {
+		t.Fatalf("metadata encryption kdf = %q", meta.Encryption.KDF)
+	}
+}
+
 func TestService_Run_ReturnsErrorWhenStorageSaveFails(t *testing.T) {
 	driver := &fakeDriver{
 		data: "SELECT 1;",
@@ -193,7 +277,7 @@ func TestService_Run_ReturnsErrorWhenStorageSaveFails(t *testing.T) {
 	st.saveErr = os.ErrNotExist
 
 	compressor := compression.NewGzipCompressor()
-	service := NewService(driver, st, compressor)
+	service := NewService(driver, st, compressor, nil)
 
 	_, err := service.Run(context.Background(), Options{
 		DatabaseName: "testdb",
@@ -213,7 +297,7 @@ func TestService_Run_ReturnsErrorWhenBackupRenderCloseFails(t *testing.T) {
 
 	st := newFakeStorage()
 	compressor := compression.NewGzipCompressor()
-	service := NewService(driver, st, compressor)
+	service := NewService(driver, st, compressor, nil)
 
 	_, err := service.Run(context.Background(), Options{
 		DatabaseName: "testdb",
@@ -238,7 +322,7 @@ func TestService_Run_SavesMetadataWithFormatAndMode(t *testing.T) {
 
 	// Тест для plain формат с schema-only
 	stPlain := newFakeStorage()
-	servicePlain := NewService(driverPlain, stPlain, compressor)
+	servicePlain := NewService(driverPlain, stPlain, compressor, nil)
 	resultPlain, err := servicePlain.Run(context.Background(), Options{
 		DatabaseName: "testdb",
 		BackupType:   "full",
@@ -274,7 +358,7 @@ func TestService_Run_SavesMetadataWithFormatAndMode(t *testing.T) {
 
 	// Тест для custom формат - используем другой сервис с другим драйвером
 	stCustom := newFakeStorage()
-	serviceCustom := NewService(driverCustom, stCustom, compressor)
+	serviceCustom := NewService(driverCustom, stCustom, compressor, nil)
 	resultCustom, err := serviceCustom.Run(context.Background(), Options{
 		DatabaseName: "testdb",
 		BackupType:   "full",
@@ -316,7 +400,7 @@ func TestService_Run_SavesTablesList(t *testing.T) {
 
 	st := newFakeStorage()
 	compressor := compression.NewGzipCompressor()
-	service := NewService(driver, st, compressor)
+	service := NewService(driver, st, compressor, nil)
 
 	result, err := service.Run(context.Background(), Options{
 		DatabaseName: "testdb",

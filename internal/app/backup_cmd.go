@@ -10,6 +10,7 @@ import (
 	"github.com/valpiks/backupctl/internal/compression"
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
+	"github.com/valpiks/backupctl/internal/encryption"
 	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
@@ -61,14 +62,19 @@ func newBackupCommand() *cobra.Command {
 
 			compressor := compression.NewGzipCompressor()
 
-			service := backup.NewService(driver, storage, compressor)
+			var encryptor encryption.Encryptor
+			if encryptionEnabled(cfg) {
+				encryptor = encryption.NewAESGCMEncryptor()
+			}
+
+			service := backup.NewService(driver, storage, compressor, encryptor)
 
 			log.Info("backup started",
 				"db", cfg.Database.ActiveDatabaseName(),
 				"type", cfg.Backup.Type,
 			)
 
-			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type, SchemaOnly: schemaOnly, DataOnly: dataOnly, Tables: tables, Format: format})
+			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type, SchemaOnly: schemaOnly, DataOnly: dataOnly, Tables: tables, Format: format, EncryptionEnabled: encryptionEnabled(cfg), EncryptionPassword: encryptionPassword(cfg)})
 			if err != nil {
 				log.Error("backup failed", "error", secrets.Redact(err.Error(), knownSecrets))
 				return redactError(err, knownSecrets)
