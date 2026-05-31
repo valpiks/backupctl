@@ -1,0 +1,27 @@
+runtime:
+  env_file: ./backupctl.env
+
+database:
+  type: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password_env: BACKUPCTL_POSTGRES_PASSWORD
+    name: your_db_name
+    sslmode: disable
+
+backup:
+  type: full
+  compression: gzip
+  encryption:
+    enabled: true
+    password_env: BACKUPCTL_ENCRYPTION_PASSWORD
+
+storage:
+  type: local
+  local:
+    path: ./backups
+
+logging:
+  level: info

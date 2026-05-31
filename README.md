@@ -42,7 +42,7 @@ Release builds inject the Git tag version automatically via GoReleaser.
 Install from a released tag with Go:
 
 ```bash
-go install github.com/valpiks/backupctl/cmd/backupctl@v0.7.0
+go install github.com/valpiks/backupctl/cmd/backupctl@v0.8.0
 ```
 
 Or install the latest released version:
@@ -59,7 +59,7 @@ cd backupctl
 go build -o backupctl ./cmd/backupctl
 ```
 
-Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.7.0`.
+Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.8.0`.
 
 ---
 
@@ -94,8 +94,30 @@ Examples in the repository:
 * `configs/config.example.yaml` for PostgreSQL with local storage
 * `configs/config.mongo.example.yaml` for MongoDB
 * `configs/config.s3.example.yaml` for S3 storage
+* `configs/config.encrypted.example.yaml` for encrypted PostgreSQL backups
+* `configs/backupctl.env.example` for runtime environment variables
 * `configs/config.scheduler.cron.example.yaml` for scheduled cron backups
 * `configs/config.scheduler.interval.example.yaml` for scheduled interval backups
+
+### Runtime env file
+
+`runtime.env_file` loads environment variables before resolving `*_env` config fields.
+
+```yaml
+runtime:
+  env_file: /etc/backupctl/backupctl.env
+```
+
+Example env file:
+
+```env
+BACKUPCTL_POSTGRES_PASSWORD=...
+BACKUPCTL_ENCRYPTION_PASSWORD=...
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+This works for manual commands and background services because `backupctl` loads the env file itself before resolving secrets.
 
 ### Local storage (PostgreSQL)
 
@@ -148,6 +170,36 @@ backup:
     interval: 24h
     log_file: ./logs/backupctl-scheduler.log
 ```
+
+### Encrypted backups
+
+Encrypted backups use AES-256-GCM. The encryption password is read from an environment variable and must be available for both backup and restore.
+
+```yaml
+runtime:
+  env_file: ./backupctl.env
+
+database:
+  type: postgres
+  postgres:
+    password_env: BACKUPCTL_POSTGRES_PASSWORD
+
+backup:
+  type: full
+  compression: gzip
+  encryption:
+    enabled: true
+    password_env: BACKUPCTL_ENCRYPTION_PASSWORD
+```
+
+```bash
+cp configs/backupctl.env.example ./backupctl.env
+./backupctl backup -c configs/config.encrypted.example.yaml
+```
+
+For quick local tests you can also export the variables directly instead of using `runtime.env_file`.
+
+Encrypted backup files use the `.enc` suffix, for example `.sql.gz.enc` or `.dump.enc`.
 
 ### Local storage (MongoDB)
 
@@ -459,6 +511,30 @@ Install the scheduler as a background service:
 ./backupctl service install --config configs/config.scheduler.interval.example.yaml
 ```
 
+`service install` uses the currently running `backupctl` executable as the default service binary path. If you installed with `go install`, this usually resolves to a path like `~/go/bin/backupctl`.
+
+You can override the binary path explicitly when needed:
+
+```bash
+backupctl service install \
+  --user \
+  --config /path/to/config.yaml \
+  --binary "$(command -v backupctl)"
+```
+
+When scheduled backups use `password_env` or encrypted backups, put `runtime.env_file` in the config. The installed service only needs the config path; `backupctl scheduler run` loads the env file itself.
+
+```bash
+sudo mkdir -p /etc/backupctl
+sudo cp configs/config.encrypted.example.yaml /etc/backupctl/config.yaml
+sudo cp configs/backupctl.env.example /etc/backupctl/backupctl.env
+# Set runtime.env_file in /etc/backupctl/config.yaml to /etc/backupctl/backupctl.env.
+
+backupctl service install --config /etc/backupctl/config.yaml
+```
+
+Do not put secrets directly into systemd units or launchd plists. Prefer `runtime.env_file`.
+
 Check service status:
 
 ```bash
@@ -480,6 +556,10 @@ Use `--dry-run` to preview the generated service file without installing it:
 On macOS, `backupctl` installs a user-level launchd service in `~/Library/LaunchAgents` by default. System-level launchd services are not supported yet, so use `--user` explicitly when you want to make that scope clear.
 
 On Linux, `backupctl` installs a system-level systemd service in `/etc/systemd/system` by default. Use `--user` for a user-level systemd service in `~/.config/systemd/user`.
+
+Generated service files use absolute binary/config paths and set the working directory to the directory where `service install` was run. On macOS, the launchd plist also includes a PATH that covers common Homebrew locations for PostgreSQL tools such as `pg_dump`.
+
+Windows service installation is not supported yet. Manual commands and config/env loading work on Windows, but `backupctl service install` currently supports Linux systemd and macOS launchd only.
 
 Useful flags:
 
@@ -563,12 +643,17 @@ cmd/backupctl          # entrypoint
 internal/app           # CLI commands
 internal/backup        # backup service
 internal/database      # DB drivers
+internal/dbdriver      # shared DB driver interface
 internal/storage       # storage layer (local, s3)
 internal/compression   # compression logic
 internal/config        # config loading
+internal/encryption    # AES-GCM encryption logic
+internal/envfile       # runtime env file parser
 internal/logger        # logging
 internal/scheduler     # scheduled jobs and scheduler execution
+internal/secrets       # secret redaction helpers
 internal/service       # systemd and launchd service installation
+internal/integration   # opt-in integration tests
 ```
 
 ---
@@ -581,8 +666,9 @@ internal/service       # systemd and launchd service installation
 * MongoDB uses native tools `mongosh`, `mongodump`, and `mongorestore`
 * Plain format is text-based and human-readable
 * Custom format is optimized for restore and storage
-* Restore auto-detects format from metadata or filename
-* Metadata contains: format, schema-only, data-only, tables, compression
+* Encrypted backups use AES-256-GCM and the `.enc` suffix
+* Restore auto-detects format and encryption from metadata or filename
+* Metadata contains: format, schema-only, data-only, tables, compression, encryption
 * All S3-compatible providers are supported (AWS, MinIO, R2, DigitalOcean, Yandex Cloud, etc.)
 * Scheduled jobs are stored in `.backupctl/jobs.json`
 * `scheduler run` must stay running for cron and interval jobs to execute
@@ -650,9 +736,9 @@ goreleaser release --snapshot --clean
 Release flow:
 
 ```bash
-git tag v0.7.0
+git tag v0.8.0
 git push origin main
-git push origin v0.7.0
+git push origin v0.8.0
 ```
 
 The workflow publishes archives and checksums to the GitHub Release page for that tag.
@@ -665,6 +751,7 @@ The workflow publishes archives and checksums to the GitHub Release page for tha
 * Use `config.example.yaml` for sharing config structure
 * Use `database.postgres.password_env` for PostgreSQL passwords
 * Use `database.mongo.uri_env` for MongoDB connection strings
+* Use `backup.encryption.password_env` for backup encryption passwords
 * Set S3 credentials via environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
 * Use `.env` files locally (added to `.gitignore`)
 
@@ -692,15 +779,24 @@ database:
     database: app
 ```
 
+Backup encryption password from an environment variable:
+
+```yaml
+backup:
+  encryption:
+    enabled: true
+    password_env: BACKUPCTL_ENCRYPTION_PASSWORD
+```
+
 ---
 
 ## Roadmap
 
 - [x] S3 / cloud storage support
 - [x] PostgreSQL multiple backup modes and formats
-- [ ] scheduler daemon mode (cron/interval jobs are available through `scheduler run`)
+- [x] scheduler daemon mode (cron/interval jobs through `scheduler run` and `service install`)
 - [ ] incremental backups
 - [ ] MySQL support
-- [ ] encryption for backups
+- [x] encryption for backups
 - [ ] backup verification
 - [ ] S3 lifecycle policies integration

@@ -10,16 +10,19 @@ import (
 
 	"github.com/valpiks/backupctl/internal/compression"
 	database "github.com/valpiks/backupctl/internal/dbdriver"
+	"github.com/valpiks/backupctl/internal/encryption"
 	"github.com/valpiks/backupctl/internal/storage"
 )
 
 type Options struct {
-	DatabaseName string
-	BackupType   string
-	SchemaOnly   bool
-	DataOnly     bool
-	Tables       []string
-	Format       string
+	DatabaseName       string
+	BackupType         string
+	SchemaOnly         bool
+	DataOnly           bool
+	Tables             []string
+	Format             string
+	EncryptionEnabled  bool
+	EncryptionPassword string
 }
 
 type Result struct {
@@ -32,15 +35,18 @@ type Service struct {
 	db         database.Driver
 	storage    storage.Storage
 	compressor *compression.GzipCompressor
+	encryptor  encryption.Encryptor
 }
 
 func NewService(db database.Driver,
 	storage storage.Storage,
-	compressor *compression.GzipCompressor) *Service {
+	compressor *compression.GzipCompressor,
+	encryptor encryption.Encryptor) *Service {
 	return &Service{
 		db:         db,
 		storage:    storage,
 		compressor: compressor,
+		encryptor:  encryptor,
 	}
 }
 
@@ -66,9 +72,31 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		compressedReader = backupReader
 	}
 
-	fileName := buildBackupFileName(opts.DatabaseName, startedAt, opts.Format)
+	backupReaderForStorage := compressedReader
 
-	if err := s.storage.Save(ctx, fileName, compressedReader); err != nil {
+	encrypted := false
+
+	if opts.EncryptionEnabled {
+		if s.encryptor == nil {
+			return nil, fmt.Errorf("backup encryption is enabled but encryptor is not configured")
+		}
+
+		encryptedReader, err := s.encryptor.Encrypt(backupReaderForStorage, opts.EncryptionPassword)
+		if err != nil {
+			return nil, fmt.Errorf("encrypt backup: %w", err)
+		}
+		defer encryptedReader.Close()
+
+		backupReaderForStorage = encryptedReader
+		encrypted = true
+	}
+
+	fileName := buildBackupFileName(opts.DatabaseName, startedAt, opts.Format)
+	if encrypted {
+		fileName += ".enc"
+	}
+
+	if err := s.storage.Save(ctx, fileName, backupReaderForStorage); err != nil {
 		_ = backupReader.Close()
 		if s.storage != nil {
 			_ = s.storage.Delete(ctx, fileName)
@@ -90,6 +118,15 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		compression = "gzip"
 	}
 
+	var encryptionMetadata *EncryptionMetadata
+	if encrypted {
+		encryptionMetadata = &EncryptionMetadata{
+			Enabled:   true,
+			Algorithm: "AES-256-GCM",
+			KDF:       "argon2id",
+		}
+	}
+
 	metadata := Metadata{
 		DatabaseName: opts.DatabaseName,
 		BackupType:   opts.BackupType,
@@ -103,6 +140,7 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		DataOnly:     opts.DataOnly,
 		Tabels:       opts.Tables,
 		Compression:  compression,
+		Encryption:   encryptionMetadata,
 	}
 
 	metadataData, err := json.MarshalIndent(metadata, "", "  ")
@@ -110,12 +148,7 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("marshal backup metadata %w", err)
 	}
 
-	metadataFileName := strings.TrimSuffix(fileName, ".sql.gz")
-	if !strings.HasSuffix(metadataFileName, ".dump") {
-		metadataFileName = strings.TrimSuffix(metadataFileName, ".sql") + ".metadata.json"
-	} else {
-		metadataFileName = strings.TrimSuffix(metadataFileName, ".dump") + ".metadata.json"
-	}
+	metadataFileName := buildMetadataFileName(fileName)
 
 	if err := s.storage.Save(ctx, metadataFileName, strings.NewReader(string(metadataData))); err != nil {
 		return nil, fmt.Errorf("save backup metadata %w", err)
@@ -144,4 +177,12 @@ func buildBackupFileName(databaseName string, t time.Time, format string) string
 		return base + ".backup"
 	}
 
+}
+
+func buildMetadataFileName(fileName string) string {
+	name := strings.TrimSuffix(fileName, ".enc")
+	name = strings.TrimSuffix(name, ".sql.gz")
+	name = strings.TrimSuffix(name, ".sql")
+	name = strings.TrimSuffix(name, ".dump")
+	return name + ".metadata.json"
 }

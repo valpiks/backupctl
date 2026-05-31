@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/valpiks/backupctl/internal/envfile"
 	"gopkg.in/yaml.v3"
 )
 
@@ -12,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Backup   BackupConfig   `yaml:"backup"`
 	Storage  StorageConfig  `yaml:"storage"`
+	Runtime  RuntimeConfig  `yaml:"runtime,omitempty"`
 	Logging  LoggingConfig  `yaml:"logging"`
 }
 
@@ -41,7 +43,8 @@ type BackupConfig struct {
 	Type        string `yaml:"type"`
 	Compression string `yaml:"compression"`
 
-	Scheduler *SchedulerConfig `yaml:"scheduler,omitempty"`
+	Scheduler  *SchedulerConfig  `yaml:"scheduler,omitempty"`
+	Encryption *EncryptionConfig `yaml:"encryption,omitempty"`
 }
 
 type StorageConfig struct {
@@ -69,6 +72,16 @@ type SchedulerConfig struct {
 	LogFile  string `yaml:"log_file,omitempty"`
 }
 
+type EncryptionConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	PasswordEnv string `yaml:"password_env"`
+	Password    string `yaml:"-"`
+}
+
+type RuntimeConfig struct {
+	EnvFile string `yaml:"env_file,omitempty"`
+}
+
 type LoggingConfig struct {
 	Level string `yaml:"level"`
 }
@@ -83,6 +96,12 @@ func Load(path string) (*Config, error) {
 
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config %w", err)
+	}
+
+	if cfg.Runtime.EnvFile != "" {
+		if err := envfile.LoadAndApply(cfg.Runtime.EnvFile); err != nil {
+			return nil, fmt.Errorf("load runtime.env_file %w", err)
+		}
 	}
 
 	if err := cfg.ResolveEnvSecrets(); err != nil {
@@ -102,6 +121,10 @@ func (c *Config) ResolveEnvSecrets() error {
 	}
 
 	if err := resolveMongoEnvSecrets(&c.Database.Mongo); err != nil {
+		return err
+	}
+
+	if err := resolveEncryptionEnvSecrets(c.Backup.Encryption); err != nil {
 		return err
 	}
 
@@ -170,6 +193,10 @@ func (c *Config) KnownSecrets() []string {
 		secrets = append(secrets, c.Database.Postgres.Password)
 	}
 
+	if c.Backup.Encryption != nil && c.Backup.Encryption.Password != "" {
+		secrets = append(secrets, c.Backup.Encryption.Password)
+	}
+
 	return secrets
 }
 
@@ -227,4 +254,22 @@ func requireEnv(name string) (string, error) {
 	}
 
 	return value, nil
+}
+
+func resolveEncryptionEnvSecrets(cfg *EncryptionConfig) error {
+	if cfg == nil || !cfg.Enabled {
+		return nil
+	}
+
+	if cfg.PasswordEnv == "" {
+		return fmt.Errorf("backup.encryption.password_env is required when encryption is enabled")
+	}
+
+	value, err := requireEnv(cfg.PasswordEnv)
+	if err != nil {
+		return fmt.Errorf("backup.encryption.password_env: %w", err)
+	}
+
+	cfg.Password = value
+	return nil
 }

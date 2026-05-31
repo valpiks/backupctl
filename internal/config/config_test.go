@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -342,6 +343,125 @@ logging:
 	}
 }
 
+func TestLoadEncryptionPasswordEnv(t *testing.T) {
+	t.Setenv("BACKUPCTL_ENCRYPTION_PASSWORD", "encrypt-secret")
+
+	configPath := writeTempConfig(t, `
+database:
+  type: postgres
+  postgres:
+    name: app
+backup:
+  type: full
+  compression: gzip
+  encryption:
+    enabled: true
+    password_env: BACKUPCTL_ENCRYPTION_PASSWORD
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Backup.Encryption == nil {
+		t.Fatal("Backup.Encryption = nil")
+	}
+
+	if cfg.Backup.Encryption.Password != "encrypt-secret" {
+		t.Fatalf("Encryption.Password = %q, want encrypt-secret", cfg.Backup.Encryption.Password)
+	}
+}
+
+func TestLoadEncryptionEnabledWithoutPasswordEnv(t *testing.T) {
+	configPath := writeTempConfig(t, `
+database:
+  type: postgres
+  postgres:
+    name: app
+backup:
+  type: full
+  compression: gzip
+  encryption:
+    enabled: true
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`)
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("Load() error = nil")
+	}
+
+	if !strings.Contains(err.Error(), "backup.encryption.password_env is required") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func TestLoadRuntimeEnvFile(t *testing.T) {
+	t.Setenv("BACKUPCTL_POSTGRES_PASSWORD", "")
+	t.Setenv("BACKUPCTL_ENCRYPTION_PASSWORD", "")
+
+	dir := t.TempDir()
+
+	envPath := filepath.Join(dir, "backupctl.env")
+	if err := os.WriteFile(envPath, []byte(`
+BACKUPCTL_POSTGRES_PASSWORD=from-env-file
+BACKUPCTL_ENCRYPTION_PASSWORD=encrypt-from-env-file
+`), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	configPath := writeTempConfig(t, fmt.Sprintf(`
+runtime:
+  env_file: %q
+database:
+  type: postgres
+  postgres:
+    name: app
+    password_env: BACKUPCTL_POSTGRES_PASSWORD
+backup:
+  type: full
+  compression: gzip
+  encryption:
+    enabled: true
+    password_env: BACKUPCTL_ENCRYPTION_PASSWORD
+storage:
+  type: local
+  local:
+    path: ./backups
+logging:
+  level: info
+`, envPath))
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Database.Postgres.Password != "from-env-file" {
+		t.Fatalf("Postgres.Password = %q, want from-env-file", cfg.Database.Postgres.Password)
+	}
+
+	if cfg.Backup.Encryption == nil {
+		t.Fatal("Backup.Encryption = nil")
+	}
+
+	if cfg.Backup.Encryption.Password != "encrypt-from-env-file" {
+		t.Fatalf("Encryption.Password = %q, want encrypt-from-env-file", cfg.Backup.Encryption.Password)
+	}
+}
+
 func TestActiveDatabaseName(t *testing.T) {
 	t.Parallel()
 
@@ -404,10 +524,16 @@ func TestKnownSecrets(t *testing.T) {
 				URI: "mongodb://user:mongo-secret@localhost:27017/app",
 			},
 		},
+		Backup: BackupConfig{
+			Encryption: &EncryptionConfig{
+				Enabled:  true,
+				Password: "encrypt-secret",
+			},
+		},
 	}
 
 	got := cfg.KnownSecrets()
-	want := []string{"postgres-secret"}
+	want := []string{"postgres-secret", "encrypt-secret"}
 
 	if len(got) != len(want) {
 		t.Fatalf("KnownSecrets() = %v, want %v", got, want)

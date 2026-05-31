@@ -24,11 +24,11 @@ Type=simple
 ExecStart=%s scheduler run --config %s
 Restart=always
 RestartSec=5
-WorkingDirectory=/var/lib/backupctl
+WorkingDirectory=%s
 
 [Install]
 WantedBy=multi-user.target
-`, opts.BinaryPath, opts.ConfigPath)
+`, opts.BinaryPath, opts.ConfigPath, opts.WorkDir)
 }
 
 func startSystemdService(opts InstallOptions) error {

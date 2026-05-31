@@ -10,6 +10,7 @@ import (
 	"github.com/valpiks/backupctl/internal/compression"
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
+	"github.com/valpiks/backupctl/internal/encryption"
 	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/scheduler"
 	"github.com/valpiks/backupctl/internal/secrets"
@@ -71,10 +72,16 @@ func newSchedulerRunCommand() *cobra.Command {
 			}
 
 			compressor := compression.NewGzipCompressor()
-			backupService := backup.NewService(driver, storage, compressor)
+			var encryptor encryption.Encryptor
+			if encryptionEnabled(cfg) {
+				encryptor = encryption.NewAESGCMEncryptor()
+			}
+
+			backupService := backup.NewService(driver, storage, compressor, encryptor)
 
 			store := scheduler.NewJSONStore(".backupctl/jobs.json")
 			service := scheduler.NewService(store, backupService, log)
+			service.SetEncryption(encryptionEnabled(cfg), encryptionPassword(cfg))
 
 			if err := service.RegisterCronJobs(ctx); err != nil {
 				log.Error("register cron jobs failed", "error", secrets.Redact(err.Error(), knownSecrets))

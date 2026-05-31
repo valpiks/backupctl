@@ -17,6 +17,7 @@ type InstallOptions struct {
 	Name       string
 	BinaryPath string
 	ConfigPath string
+	WorkDir    string
 	User       bool
 	System     bool
 	DryRun     bool
@@ -71,7 +72,11 @@ func RenderCurrentOS(opts InstallOptions) (RenderedService, error) {
 }
 
 func Render(goos string, opts InstallOptions) (RenderedService, error) {
-	opts = withDefaults(opts)
+	var err error
+	opts, err = prepareInstallOptions(opts)
+	if err != nil {
+		return RenderedService{}, err
+	}
 
 	opts = withPlatformDefaults(goos, opts)
 
@@ -125,6 +130,45 @@ func withDefaults(opts InstallOptions) InstallOptions {
 	return opts
 }
 
+func prepareInstallOptions(opts InstallOptions) (InstallOptions, error) {
+	opts = withDefaults(opts)
+
+	if opts.WorkDir == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return InstallOptions{}, fmt.Errorf("get working directory: %w", err)
+		}
+		opts.WorkDir = wd
+	}
+
+	var err error
+
+	opts.BinaryPath, err = absPathIfSet(opts.BinaryPath)
+	if err != nil {
+		return InstallOptions{}, fmt.Errorf("resolve binary path: %w", err)
+	}
+
+	opts.ConfigPath, err = absPathIfSet(opts.ConfigPath)
+	if err != nil {
+		return InstallOptions{}, fmt.Errorf("resolve config path: %w", err)
+	}
+
+	opts.WorkDir, err = absPathIfSet(opts.WorkDir)
+	if err != nil {
+		return InstallOptions{}, fmt.Errorf("resolve working directory: %w", err)
+	}
+
+	return opts, nil
+}
+
+func absPathIfSet(path string) (string, error) {
+	if path == "" || filepath.IsAbs(path) {
+		return path, nil
+	}
+
+	return filepath.Abs(path)
+}
+
 func validateOptions(opts InstallOptions) error {
 	if opts.Name == "" {
 		return fmt.Errorf("service name is required")
@@ -150,7 +194,12 @@ func InstallCurrentOS(opts InstallOptions) (RenderedService, error) {
 }
 
 func Install(goos string, opts InstallOptions) (RenderedService, error) {
-	opts = withDefaults(opts)
+	var err error
+	opts, err = prepareInstallOptions(opts)
+	if err != nil {
+		return RenderedService{}, err
+	}
+
 	opts = withPlatformDefaults(goos, opts)
 
 	rendered, err := Render(goos, opts)
