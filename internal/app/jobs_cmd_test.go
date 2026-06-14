@@ -32,7 +32,7 @@ func TestJobsCommandListStatusDelete(t *testing.T) {
 	}
 
 	statusOut := executeJobsCommand(t, "status", "job_1")
-	if !strings.Contains(statusOut, "id: job_1") || !strings.Contains(statusOut, "interval: 24h") {
+	if !strings.Contains(statusOut, "Job status") || !strings.Contains(statusOut, "job_1") || !strings.Contains(statusOut, "24h") {
 		t.Fatalf("jobs status output = %q, want job details", statusOut)
 	}
 
@@ -51,10 +51,20 @@ func TestJobsCommandListStatusDelete(t *testing.T) {
 	}
 }
 
+func TestJobsCommandEmptyState(t *testing.T) {
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+
+	out := executeJobsCommand(t)
+	if !strings.Contains(out, "No scheduled jobs found.") {
+		t.Fatalf("jobs output = %q, want empty state", out)
+	}
+}
+
 func executeJobsCommand(t *testing.T, args ...string) string {
 	t.Helper()
 
-	cmd := newJobsCommand()
+	cmd := newJobsCommand(CLIOptions{})
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

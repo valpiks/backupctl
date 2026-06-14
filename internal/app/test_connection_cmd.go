@@ -8,16 +8,18 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
-	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/secrets"
 )
 
-func newTestCommand() *cobra.Command {
+func newTestCommand(opts CLIOptions) *cobra.Command {
 	var configPath string
 
 	cmd := &cobra.Command{
 		Use:   "test-connection",
 		Short: "Test database connection (deprecated: use doctor)",
+		Long:  "Test the configured database connection. This command is deprecated; use backupctl doctor instead.",
+		Example: `  backupctl test-connection -c configs/config.yaml
+  backupctl doctor -c configs/config.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
@@ -28,7 +30,7 @@ func newTestCommand() *cobra.Command {
 			}
 			knownSecrets := cfg.KnownSecrets()
 
-			log := logger.New(cfg.Logging.Level)
+			log := commandLogger(cfg, opts)
 			log.Info("config loaded", "path", configPath)
 			log.Info("connection test started", "db", cfg.Database.ActiveDatabaseName())
 
@@ -44,7 +46,9 @@ func newTestCommand() *cobra.Command {
 			}
 
 			log.Info("connection test succeeded", "db", cfg.Database.ActiveDatabaseName())
-			fmt.Println("connection successful")
+			if !opts.Quiet {
+				fmt.Fprintln(cmd.OutOrStdout(), "connection successful")
+			}
 			return nil
 		},
 	}

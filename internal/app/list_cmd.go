@@ -12,20 +12,25 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/config"
-	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
-func newListCommand() *cobra.Command {
+func newListCommand(opts CLIOptions) *cobra.Command {
 	var configPath string
 	var limit int
 	var showFiles bool
 	var jsonOutput bool
 
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List backups",
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List backups",
+		Long:    "List backups and backup metadata from configured storage.",
+		Example: `  backupctl list -c configs/config.yaml
+  backupctl list -c configs/config.yaml --limit 10
+  backupctl list -c configs/config.yaml --json
+  backupctl list -c configs/config.yaml --files`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
@@ -36,7 +41,7 @@ func newListCommand() *cobra.Command {
 			}
 			knownSecrets := cfg.KnownSecrets()
 
-			log := logger.New(cfg.Logging.Level)
+			log := commandLogger(cfg, opts)
 			log.Info("config loaded", "path", configPath)
 
 			storage, err := storagefactory.NewStorage(cfg.Storage)
@@ -53,10 +58,27 @@ func newListCommand() *cobra.Command {
 				return redactError(err, knownSecrets)
 			}
 
+			fileSizes := make(map[string]int64, len(files))
+			for _, file := range files {
+				fileSizes[file.Name] = file.Size
+			}
+
 			if showFiles {
-				for _, f := range files {
-					fmt.Printf("%s (%d bytes)\n", f.Name, f.Size)
+				if jsonOutput {
+					return PrintJSON(cmd.OutOrStdout(), files)
 				}
+
+				if len(files) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No files found.")
+					log.Info("raw backup files listed", "count", len(files))
+					return nil
+				}
+
+				rows := make([][]string, 0, len(files))
+				for _, f := range files {
+					rows = append(rows, []string{f.Name, HumanBytes(f.Size)})
+				}
+				PrintTable(cmd.OutOrStdout(), []string{"File", "Size"}, rows)
 				log.Info("raw backup files listed", "count", len(files))
 				return nil
 			}
@@ -104,16 +126,31 @@ func newListCommand() *cobra.Command {
 					return redactError(err, knownSecrets)
 				}
 
-				fmt.Println(string(data))
+				fmt.Fprintln(cmd.OutOrStdout(), string(data))
 				log.Info("backups listed", "files_total", len(files), "metadata_total", len(metadataList), "output", "json")
 				return nil
 			}
 
-			fmt.Printf("%-40s %-15s %-8s %-10s %-10s\n", "FILE", "DATABASE", "TYPE", "STATUS", "DURATION")
-
-			for _, m := range metadataList {
-				fmt.Printf("%-40s %-15s %-8s %-10s %-10s\n", m.FileName, m.DatabaseName, m.BackupType, m.Status, m.Duration)
+			if len(metadataList) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No backups found.")
+				log.Info("backups listed", "files_total", len(files), "metadata_total", len(metadataList), "output", "table")
+				return nil
 			}
+
+			rows := make([][]string, 0, len(metadataList))
+			for _, m := range metadataList {
+				rows = append(rows, []string{
+					m.StartedAt.Format("2006-01-02 15:04:05"),
+					m.DatabaseName,
+					m.BackupType,
+					m.Format,
+					HumanBytes(fileSizes[m.FileName]),
+					m.Status,
+					m.Duration,
+					m.FileName,
+				})
+			}
+			PrintTable(cmd.OutOrStdout(), []string{"Started", "Database", "Type", "Format", "Size", "Status", "Duration", "File"}, rows)
 
 			log.Info("backups listed", "files_total", len(files), "metadata_total", len(metadataList), "output", "table")
 			return nil

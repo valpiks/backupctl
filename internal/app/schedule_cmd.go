@@ -10,22 +10,26 @@ import (
 	"github.com/valpiks/backupctl/internal/scheduler"
 )
 
-func newScheduleCommand() *cobra.Command {
+func newScheduleCommand(opts CLIOptions) *cobra.Command {
 	var configPath string
 	var cronExpr string
 	var interval string
 	var format string
 
 	cmd := &cobra.Command{
-		Use:   "schedule",
+		Use:   "schedule (--cron <expr> | --interval <duration>)",
 		Short: "Create scheduled backup job",
+		Long:  "Create a scheduled backup job using a cron expression or fixed interval.",
+		Example: `  backupctl schedule -c configs/config.yaml --interval 24h
+  backupctl schedule -c configs/config.yaml --cron "0 2 * * *"
+  backupctl schedule -c configs/config.yaml --interval 12h --format custom`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cronExpr == "" && interval == "" {
-				return fmt.Errorf("either --cron or --interval is required")
+				return WithHint(fmt.Errorf("either --cron or --interval is required"), "example: backupctl schedule --interval 24h")
 			}
 
 			if cronExpr != "" && interval != "" {
-				return fmt.Errorf("--cron and --interval cannot be used together")
+				return WithHint(fmt.Errorf("--cron and --interval cannot be used together"), "choose one schedule mode")
 			}
 
 			if interval != "" {
@@ -39,7 +43,7 @@ func newScheduleCommand() *cobra.Command {
 			}
 
 			if format != "plain" && format != "custom" {
-				return fmt.Errorf("unsupported format: %s", format)
+				return WithHint(fmt.Errorf("unsupported format: %s", format), "use --format plain or --format custom")
 			}
 
 			cfg, err := config.Load(configPath)
@@ -69,7 +73,16 @@ func newScheduleCommand() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "job created: %s\n", job.ID)
+			if !opts.Quiet {
+				PrintKV(cmd.OutOrStdout(), "Job created", []KV{
+					{Key: "id", Value: job.ID},
+					{Key: "database", Value: job.DatabaseName},
+					{Key: "type", Value: job.BackupType},
+					{Key: "format", Value: job.Format},
+					{Key: "schedule", Value: firstNonEmpty(job.Cron, job.Interval)},
+					{Key: "status", Value: job.Status},
+				})
+			}
 			return nil
 		},
 	}
@@ -78,6 +91,18 @@ func newScheduleCommand() *cobra.Command {
 	cmd.Flags().StringVar(&cronExpr, "cron", "", "Cron expression")
 	cmd.Flags().StringVar(&interval, "interval", "", "Backup interval, for example 24h or 30m")
 	cmd.Flags().StringVar(&format, "format", "plain", "Backup format: plain or custom")
+	_ = cmd.RegisterFlagCompletionFunc("format", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return []string{"plain", "custom"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

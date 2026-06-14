@@ -10,8 +10,13 @@ import (
 
 func newServiceCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "service",
-		Short: "Manage backupctl background service",
+		Use:     "service",
+		Aliases: []string{"svc"},
+		Short:   "Manage backupctl background service",
+		Long:    "Install, uninstall, and inspect the backupctl scheduler as a systemd or launchd background service.",
+		Example: `  backupctl service install --user --config configs/config.yaml
+  backupctl service status --user
+  backupctl service uninstall --user`,
 	}
 
 	cmd.AddCommand(newServiceInstallCommand())
@@ -34,6 +39,10 @@ func newServiceInstallCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install backupctl scheduler as a background service",
+		Long:  "Install backupctl scheduler as a launchd service on macOS or a systemd service on Linux.",
+		Example: `  backupctl service install --user --config configs/config.yaml
+  backupctl service install --system --config /etc/backupctl/config.yaml --binary /usr/local/bin/backupctl
+  backupctl service install --user --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rendered, err := service.InstallCurrentOS(
 				service.InstallOptions{
@@ -97,6 +106,10 @@ func newServiceUninstallCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Uninstall backupctl scheduler background service",
+		Long:  "Remove the installed backupctl scheduler service for the selected user or system scope.",
+		Example: `  backupctl service uninstall --user
+  backupctl service uninstall --system
+  backupctl svc uninstall --user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := service.UninstallCurrentOS(service.UninstallOptions{
 				Name:   name,
@@ -126,6 +139,10 @@ func newServiceStatusCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show backupctl scheduler service status",
+		Long:  "Show status for the installed backupctl scheduler service in the selected user or system scope.",
+		Example: `  backupctl service status --user
+  backupctl service status --system
+  backupctl svc status --user`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return service.StatusCurrentOS(service.StatusOptions{
 				Name:   name,

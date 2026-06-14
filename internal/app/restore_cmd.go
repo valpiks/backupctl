@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"time"
 
@@ -16,23 +16,31 @@ import (
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	database "github.com/valpiks/backupctl/internal/dbdriver"
 	"github.com/valpiks/backupctl/internal/encryption"
-	"github.com/valpiks/backupctl/internal/logger"
 	"github.com/valpiks/backupctl/internal/secrets"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
-func newRestorCommand() *cobra.Command {
+func newRestoreCommand(opts CLIOptions) *cobra.Command {
 	var configPath string
 	var fileName string
 	var targetDB string
 	var yes bool
+	var jsonOutput bool
 
 	cmd := &cobra.Command{
-		Use:   "restore",
+		Use:   "restore --file <backup-file>",
 		Short: "Restore database from backup",
+		Long:  "Restore a PostgreSQL or MongoDB database from a backup file stored in configured storage.",
+		Example: `  backupctl restore -c configs/config.yaml --file app_20260607_120000.sql.gz
+  backupctl restore -c configs/config.yaml --file app_20260607_120000.sql.gz --target-db app_restore
+  backupctl restore -c configs/config.yaml --file app_20260607_120000.sql.gz --yes`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if fileName == "" {
-				return fmt.Errorf("--file is required")
+				return WithHint(fmt.Errorf("--file is required"), "pass --file <backup-file> or run backupctl list --files")
+			}
+
+			if jsonOutput && !yes {
+				return WithHint(fmt.Errorf("--json restore requires --yes"), "rerun with --yes after confirming the restore target")
 			}
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
@@ -50,11 +58,11 @@ func newRestorCommand() *cobra.Command {
 				restoreDB = targetDB
 			}
 
-			log := logger.New(cfg.Logging.Level)
+			log := commandLogger(cfg, opts)
 			log.Info("config loaded", "path", configPath)
 
 			if !yes {
-				confirmed, err := confirmRestore(fileName, restoreDB)
+				confirmed, err := confirmRestore(cmd.InOrStdin(), cmd.OutOrStdout(), fileName, restoreDB)
 				if err != nil {
 					log.Error("restore confirmation failed", "file", fileName, "error", err)
 					return err
@@ -62,7 +70,7 @@ func newRestorCommand() *cobra.Command {
 
 				if !confirmed {
 					log.Info("restore cancelled", "file", fileName, "db", restoreDB)
-					fmt.Println("restore cancelled")
+					fmt.Fprintln(cmd.OutOrStdout(), "restore cancelled")
 					return nil
 				}
 			}
@@ -107,7 +115,10 @@ func newRestorCommand() *cobra.Command {
 
 			if encrypted {
 				if !encryptionEnabled(cfg) {
-					return fmt.Errorf("backup is encrypted but backup.encryption is not enabled in config")
+					return WithHint(
+						fmt.Errorf("backup is encrypted but encryption is disabled in config"),
+						"set backup.encryption.enabled=true and provide backup.encryption.password_env",
+					)
 				}
 
 				decryptor := encryption.NewAESGCMEncryptor()
@@ -141,7 +152,27 @@ func newRestorCommand() *cobra.Command {
 			}
 
 			log.Info("restore finished", "file", fileName, "db", restoreDB)
-			fmt.Println("restore complete successfully")
+			payload := map[string]string{
+				"status":    "success",
+				"message":   "restore completed",
+				"file":      fileName,
+				"database":  restoreDB,
+				"format":    format,
+				"encrypted": YesNo(encrypted),
+			}
+
+			if jsonOutput {
+				return PrintJSON(cmd.OutOrStdout(), payload)
+			}
+
+			if !opts.Quiet {
+				PrintKV(cmd.OutOrStdout(), "Restore completed", []KV{
+					{"file", payload["file"]},
+					{"database", payload["database"]},
+					{"format", payload["format"]},
+					{"encrypted", payload["encrypted"]},
+				})
+			}
 			return nil
 		},
 	}
@@ -150,19 +181,23 @@ func newRestorCommand() *cobra.Command {
 	cmd.Flags().StringVar(&fileName, "file", "", "Backup file name")
 	cmd.Flags().StringVar(&targetDB, "target-db", "", "Target database name for restore")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompt")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print restore result as JSON")
+
+	_ = cmd.MarkFlagRequired("file")
 
 	return cmd
 }
 
-func confirmRestore(fileName string, dbName string) (bool, error) {
-	fmt.Printf(
-		"WARNING: you are about to restore database %q from %q\n",
+func confirmRestore(in io.Reader, out io.Writer, fileName string, dbName string) (bool, error) {
+	fmt.Fprintf(
+		out,
+		"You are about to restore database %q from:\n  %s\n",
 		dbName,
 		fileName,
 	)
-	fmt.Print("This may overwrite existing data. Continue? [y/N]: ")
+	fmt.Fprint(out, "This may overwrite existing data. Continue? [y/N]: ")
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := bufio.NewReader(in)
 	answer, err := reader.ReadString('\n')
 	if err != nil {
 		return false, fmt.Errorf("read confirmation: %w", err)

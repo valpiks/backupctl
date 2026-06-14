@@ -15,7 +15,7 @@ func TestScheduleCommandCreatesJob(t *testing.T) {
 	t.Chdir(tmp)
 
 	configPath := createTestConfig(t, tmp)
-	cmd := newScheduleCommand()
+	cmd := newScheduleCommand(CLIOptions{})
 
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -26,7 +26,7 @@ func TestScheduleCommandCreatesJob(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if !strings.Contains(out.String(), "job created:") {
+	if !strings.Contains(out.String(), "Job created") {
 		t.Fatalf("output = %q, want job created", out.String())
 	}
 
@@ -84,7 +84,7 @@ func TestScheduleCommandValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cmd := newScheduleCommand()
+			cmd := newScheduleCommand(CLIOptions{})
 			cmd.SetArgs(tt.args)
 
 			err := cmd.Execute()

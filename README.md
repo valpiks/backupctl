@@ -42,7 +42,7 @@ Release builds inject the Git tag version automatically via GoReleaser.
 Install from a released tag with Go:
 
 ```bash
-go install github.com/valpiks/backupctl/cmd/backupctl@v0.8.0
+go install github.com/valpiks/backupctl/cmd/backupctl@v0.9.0
 ```
 
 Or install the latest released version:
@@ -59,7 +59,70 @@ cd backupctl
 go build -o backupctl ./cmd/backupctl
 ```
 
-Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.8.0`.
+Prebuilt binaries are published automatically in GitHub Releases for version tags like `v0.9.0`.
+
+---
+
+## Quickstart
+
+```bash
+cp configs/config.example.yaml configs/config.yaml
+backupctl doctor -c configs/config.yaml
+backupctl backup -c configs/config.yaml
+backupctl list -c configs/config.yaml
+```
+
+---
+
+## Shell completion
+
+```bash
+# zsh, current session
+source <(backupctl completion zsh)
+
+# zsh, persistent
+backupctl completion zsh > "${fpath[1]}/_backupctl"
+
+# bash, current session
+source <(backupctl completion bash)
+
+# fish
+backupctl completion fish > ~/.config/fish/completions/backupctl.fish
+```
+
+---
+
+## Output controls
+
+`stdout` is reserved for command output. Diagnostic logs are written to `stderr`.
+
+```bash
+backupctl backup -c configs/config.yaml --quiet
+backupctl backup -c configs/config.yaml --verbose
+```
+
+JSON output is available for script-friendly commands:
+
+```bash
+backupctl list -c configs/config.yaml --json
+backupctl backup -c configs/config.yaml --json
+backupctl restore -c configs/config.yaml --file app.sql.gz --yes --json
+backupctl cleanup -c configs/config.yaml --keep-last 10 --dry-run --json
+backupctl jobs --json
+backupctl jobs status job_20260607_120000 --json
+backupctl doctor -c configs/config.yaml --json
+backupctl config -c configs/config.yaml --json
+backupctl version --json
+```
+
+Doctor status colors can be controlled explicitly:
+
+```bash
+backupctl doctor --color auto
+backupctl doctor --color always
+backupctl doctor --color never
+NO_COLOR=1 backupctl doctor
+```
 
 ---
 
@@ -426,7 +489,8 @@ Driver-specific tool checks:
 You will be asked for confirmation:
 
 ```text
-WARNING: you are about to restore database "testdb"
+You are about to restore database "testdb" from:
+  your_backup.sql.gz
 This may overwrite existing data. Continue? [y/N]:
 ```
 
@@ -458,7 +522,7 @@ Preview deletions:
 Delete old backups and keep the latest 5:
 
 ```bash
-./backupctl cleanup --keep-last 5
+./backupctl cleanup --keep-last 5 --yes
 ```
 
 ---
@@ -736,9 +800,9 @@ goreleaser release --snapshot --clean
 Release flow:
 
 ```bash
-git tag v0.8.0
+git tag v0.9.0
 git push origin main
-git push origin v0.8.0
+git push origin v0.9.0
 ```
 
 The workflow publishes archives and checksums to the GitHub Release page for that tag.

@@ -21,6 +21,9 @@ func newSchedulerCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scheduler",
 		Short: "Run backup scheduler",
+		Long:  "Run the long-lived backup scheduler process used by service installations.",
+		Example: `  backupctl scheduler run -c configs/config.yaml
+  backupctl service install --user --config configs/config.yaml`,
 	}
 
 	cmd.AddCommand(newSchedulerRunCommand())
@@ -34,6 +37,9 @@ func newSchedulerRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run scheduled backup jobs",
+		Long:  "Run scheduled backup jobs in the foreground until interrupted.",
+		Example: `  backupctl scheduler run -c configs/config.yaml
+  backupctl scheduler run --config /etc/backupctl/config.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(
 				cmd.Context(), os.Interrupt, syscall.SIGTERM,
