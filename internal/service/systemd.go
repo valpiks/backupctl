@@ -100,3 +100,34 @@ func uninstallSystemdService(opts UninstallOptions) error {
 
 	return nil
 }
+
+func restartSystemdService(opts RestartOptions) error {
+	serviceName := opts.Name + ".service"
+
+	args := []string{}
+	if opts.User {
+		args = append(args, "--user")
+	}
+
+	if err := opts.Runner.Run("systemctl", append(args, "restart", serviceName)...); err != nil {
+		return fmt.Errorf("systemctl restart: %w", err)
+	}
+
+	return nil
+}
+
+func logsSystemdService(opts LogsOptions) error {
+	serviceName := opts.Name + ".service"
+
+	args := []string{}
+	if opts.User {
+		args = append(args, "--user")
+	}
+
+	args = append(args, "-u", serviceName, "-n", fmt.Sprintf("%d", opts.Tail), "--no-pager")
+	if err := opts.Runner.Run("journalctl", args...); err != nil {
+		return fmt.Errorf("journalctl logs: %w", err)
+	}
+
+	return nil
+}

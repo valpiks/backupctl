@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/backupctl/internal/config"
 	"github.com/valpiks/backupctl/internal/scheduler"
 )
 
@@ -45,8 +44,7 @@ func newScheduleCommand(opts CLIOptions) *cobra.Command {
 			if format != "plain" && format != "custom" {
 				return WithHint(fmt.Errorf("unsupported format: %s", format), "use --format plain or --format custom")
 			}
-
-			cfg, err := config.Load(configPath)
+			cfg, err := loadConfig(configPath)
 			if err != nil {
 				return err
 			}
@@ -56,13 +54,18 @@ func newScheduleCommand(opts CLIOptions) *cobra.Command {
 			now := time.Now().UTC()
 
 			job := &scheduler.Job{
-				ID:           fmt.Sprintf("job_%s", now.Format("20060102_150405")),
-				Cron:         cronExpr,
-				Interval:     interval,
-				DatabaseName: cfg.Database.ActiveDatabaseName(),
-				BackupType:   cfg.Backup.Type,
-				Format:       format,
-				Status:       "scheduled",
+				ID:              fmt.Sprintf("job_%s", now.Format("20060102_150405")),
+				Cron:            cronExpr,
+				Interval:        interval,
+				DatabaseName:    cfg.Database.ActiveDatabaseName(),
+				BackupType:      cfg.Backup.Type,
+				Format:          format,
+				Status:          "scheduled",
+				Disabled:        false,
+				MissedRunPolicy: "run_once",
+				ConfigPath:      configPath,
+				CreatedAt:       now,
+				UpdatedAt:       now,
 			}
 
 			if cfg.Backup.Scheduler != nil {
@@ -87,7 +90,7 @@ func newScheduleCommand(opts CLIOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	addConfigFlag(cmd, &configPath)
 	cmd.Flags().StringVar(&cronExpr, "cron", "", "Cron expression")
 	cmd.Flags().StringVar(&interval, "interval", "", "Backup interval, for example 24h or 30m")
 	cmd.Flags().StringVar(&format, "format", "plain", "Backup format: plain or custom")

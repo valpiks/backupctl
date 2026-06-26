@@ -2,9 +2,13 @@ package backup
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +27,7 @@ type Options struct {
 	Format             string
 	EncryptionEnabled  bool
 	EncryptionPassword string
+	BackupctlVersion   string
 }
 
 type Result struct {
@@ -36,6 +41,12 @@ type Service struct {
 	storage    storage.Storage
 	compressor *compression.GzipCompressor
 	encryptor  encryption.Encryptor
+}
+
+type countingHashReader struct {
+	reader io.Reader
+	hash   hash.Hash
+	size   int64
 }
 
 func NewService(db database.Driver,
@@ -96,7 +107,9 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		fileName += ".enc"
 	}
 
-	if err := s.storage.Save(ctx, fileName, backupReaderForStorage); err != nil {
+	countingReader := newCountingHashReader(backupReaderForStorage)
+
+	if err := s.storage.Save(ctx, fileName, countingReader); err != nil {
 		_ = backupReader.Close()
 		if s.storage != nil {
 			_ = s.storage.Delete(ctx, fileName)
@@ -131,6 +144,8 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		DatabaseName: opts.DatabaseName,
 		BackupType:   opts.BackupType,
 		FileName:     fileName,
+		FileSize:     countingReader.Size(),
+		SHA256:       countingReader.SHA256(),
 		Status:       "success",
 		StartedAt:    startedAt,
 		EndedAt:      endedAt,
@@ -138,10 +153,15 @@ func (s *Service) Run(ctx context.Context, opts Options) (*Result, error) {
 		Format:       opts.Format,
 		SchemaOnly:   opts.SchemaOnly,
 		DataOnly:     opts.DataOnly,
-		Tabels:       opts.Tables,
+		Tables:       opts.Tables,
 		Compression:  compression,
 		Encryption:   encryptionMetadata,
 	}
+
+	metadata.BackupctlVersion = opts.BackupctlVersion
+
+	hostname, _ := os.Hostname()
+	metadata.Hostname = hostname
 
 	metadataData, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
@@ -185,4 +205,28 @@ func buildMetadataFileName(fileName string) string {
 	name = strings.TrimSuffix(name, ".sql")
 	name = strings.TrimSuffix(name, ".dump")
 	return name + ".metadata.json"
+}
+
+func newCountingHashReader(reader io.Reader) *countingHashReader {
+	return &countingHashReader{
+		reader: reader,
+		hash:   sha256.New(),
+	}
+}
+
+func (r *countingHashReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 {
+		r.size += int64(n)
+		_, _ = r.hash.Write(p[:n])
+	}
+	return n, err
+}
+
+func (r *countingHashReader) Size() int64 {
+	return r.size
+}
+
+func (r *countingHashReader) SHA256() string {
+	return hex.EncodeToString(r.hash.Sum(nil))
 }

@@ -127,3 +127,32 @@ func uninstallLaunchdService(opts UninstallOptions) error {
 
 	return nil
 }
+
+func restartLaunchdService(opts RestartOptions) error {
+	if opts.System {
+		return fmt.Errorf("system-level launchd restart is not implemented yet; use --user")
+	}
+
+	label := launchdLabel(InstallOptions{Name: opts.Name})
+	domain := fmt.Sprintf("gui/%d", os.Getuid())
+	target := fmt.Sprintf("%s/%s", domain, label)
+
+	if err := opts.Runner.Run("launchctl", "kickstart", "-k", target); err != nil {
+		return fmt.Errorf("launchctl kickstart: %w", err)
+	}
+
+	return nil
+}
+
+func logsLaunchdService(opts LogsOptions) error {
+	if opts.System {
+		return fmt.Errorf("system-level launchd logs are not implemented yet; use --user")
+	}
+
+	label := launchdLabel(InstallOptions{Name: opts.Name})
+	if err := opts.Runner.Run("log", "show", "--predicate", fmt.Sprintf(`process == "backupctl" OR subsystem == "%s"`, label), "--last", "1h", "--style", "compact"); err != nil {
+		return fmt.Errorf("log show: %w", err)
+	}
+
+	return nil
+}

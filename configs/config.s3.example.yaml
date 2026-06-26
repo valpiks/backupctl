@@ -20,6 +20,9 @@ storage:
     prefix: backups/
     endpoint: http://localhost:9000
     force_path_style: true
+    # server_side_encryption: AES256
+    # sse_kms_key_id: ""
 
 logging:
   level: info
+  format: text

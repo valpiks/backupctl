@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/secrets"
+	storagepkg "github.com/valpiks/backupctl/internal/storage"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -24,6 +24,7 @@ type DoctorCheck struct {
 func newDoctorCommand(opts CLIOptions) *cobra.Command {
 	var configPath string
 	var jsonOutput bool
+	var deep bool
 
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -36,8 +37,7 @@ func newDoctorCommand(opts CLIOptions) *cobra.Command {
 			defer cancel()
 			out := cmd.OutOrStdout()
 			checks := make([]DoctorCheck, 0, 8)
-
-			cfg, err := config.Load(configPath)
+			cfg, err := loadConfig(configPath)
 			if err != nil {
 				return err
 			}
@@ -60,12 +60,22 @@ func newDoctorCommand(opts CLIOptions) *cobra.Command {
 			}
 			checks = append(checks, DoctorCheck{Status: "OK", Check: "database ping", Details: cfg.Database.ActiveDatabaseName()})
 
-			if _, err := storagefactory.NewStorage(cfg.Storage); err != nil {
+			storage, err := storagefactory.NewStorage(cfg.Storage)
+			if err != nil {
 				checks = append(checks, DoctorCheck{Status: "FAIL", Check: "storage", Details: secrets.Redact(err.Error(), knownSecrets)})
 				_ = printDoctorChecks(out, checks, jsonOutput, opts.Color)
 				return redactError(err, knownSecrets)
 			}
 			checks = append(checks, DoctorCheck{Status: "OK", Check: "storage", Details: cfg.Storage.Type})
+
+			if deep {
+				if err := runStorageDeepCheck(ctx, storage); err != nil {
+					checks = append(checks, DoctorCheck{Status: "FAIL", Check: "storage deep check", Details: secrets.Redact(err.Error(), knownSecrets)})
+					_ = printDoctorChecks(out, checks, jsonOutput, opts.Color)
+					return redactError(err, knownSecrets)
+				}
+				checks = append(checks, DoctorCheck{Status: "OK", Check: "storage write/read/delete", Details: cfg.Storage.Type})
+			}
 
 			dbTools := requiredDatabaseTools(cfg.Database.Type)
 
@@ -99,8 +109,9 @@ func newDoctorCommand(opts CLIOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	addConfigFlag(cmd, &configPath)
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print doctor checks as JSON")
+	cmd.Flags().BoolVar(&deep, "deep", false, "Run read/write/delete storage checks")
 
 	return cmd
 }
@@ -142,4 +153,41 @@ func requiredDatabaseTools(databaseType string) []string {
 	default:
 		return []string{}
 	}
+}
+
+func runStorageDeepCheck(ctx context.Context, storage storagepkg.Storage) error {
+	name := fmt.Sprintf(".backupctl-doctor-%d.txt", time.Now().UnixNano())
+	content := "backupctl doctor storage check\n"
+
+	if err := storage.Save(ctx, name, strings.NewReader(content)); err != nil {
+		return fmt.Errorf("write test object: %w", err)
+	}
+
+	reader, err := storage.Open(ctx, name)
+	if err != nil {
+		_ = storage.Delete(ctx, name)
+		return fmt.Errorf("read test object: %w", err)
+	}
+
+	data, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil {
+		_ = storage.Delete(ctx, name)
+		return fmt.Errorf("read test object body: %w", readErr)
+	}
+	if closeErr != nil {
+		_ = storage.Delete(ctx, name)
+		return fmt.Errorf("close test object: %w", closeErr)
+	}
+
+	if string(data) != content {
+		_ = storage.Delete(ctx, name)
+		return fmt.Errorf("test object content mismatch")
+	}
+
+	if err := storage.Delete(ctx, name); err != nil {
+		return fmt.Errorf("delete test object: %w", err)
+	}
+
+	return nil
 }

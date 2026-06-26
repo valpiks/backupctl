@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-func NewFile(level string, path string) (*slog.Logger, func() error, error) {
+func NewFile(level string, path string, format ...string) (*slog.Logger, func() error, error) {
 	var slogLevel slog.Level
 
 	switch level {
@@ -29,9 +29,16 @@ func NewFile(level string, path string) (*slog.Logger, func() error, error) {
 		return nil, nil, err
 	}
 
-	handler := slog.NewTextHandler(file, &slog.HandlerOptions{
+	opts := &slog.HandlerOptions{
 		Level: slogLevel,
-	})
+	}
+
+	var handler slog.Handler
+	if len(format) > 0 && format[0] == "json" {
+		handler = slog.NewJSONHandler(file, opts)
+	} else {
+		handler = slog.NewTextHandler(file, opts)
+	}
 
 	return slog.New(handler), file.Close, nil
 }

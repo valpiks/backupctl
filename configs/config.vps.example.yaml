@@ -1,5 +1,5 @@
 runtime:
-  env_file: ./backupctl.env
+  env_file: /etc/backupctl/backupctl.env
 
 database:
   type: postgres
@@ -8,20 +8,24 @@ database:
     port: 5432
     user: postgres
     password_env: BACKUPCTL_POSTGRES_PASSWORD
-    name: your_db_name
+    name: app
     sslmode: disable
+  mongo:
+    uri_env: BACKUPCTL_MONGO_URI
+    database: app
 
 backup:
   type: full
   compression: gzip
-  encryption:
+  scheduler:
     enabled: true
-    password_env: BACKUPCTL_ENCRYPTION_PASSWORD
+    interval: 24h
+    log_file: /var/log/backupctl/scheduler.log
 
 storage:
   type: local
   local:
-    path: ./backups
+    path: /var/lib/backupctl/backups
 
 logging:
   level: info

@@ -22,6 +22,64 @@ func newServiceCommand() *cobra.Command {
 	cmd.AddCommand(newServiceInstallCommand())
 	cmd.AddCommand(newServiceUninstallCommand())
 	cmd.AddCommand(newServiceStatusCommand())
+	cmd.AddCommand(newServiceRestartCommand())
+	cmd.AddCommand(newServiceLogsCommand())
+
+	return cmd
+}
+
+func newServiceRestartCommand() *cobra.Command {
+	var name string
+	var user bool
+	var system bool
+
+	cmd := &cobra.Command{
+		Use:   "restart",
+		Short: "Restart backupctl scheduler background service",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := service.RestartCurrentOS(service.RestartOptions{
+				Name:   name,
+				User:   user,
+				System: system,
+			}); err != nil {
+				return err
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), "service restarted")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&name, "name", service.DefaultName, "Service name")
+	cmd.Flags().BoolVar(&user, "user", false, "Restart user-level service")
+	cmd.Flags().BoolVar(&system, "system", false, "Restart system-level service")
+
+	return cmd
+}
+
+func newServiceLogsCommand() *cobra.Command {
+	var name string
+	var user bool
+	var system bool
+	var tail int
+
+	cmd := &cobra.Command{
+		Use:   "logs",
+		Short: "Show backupctl scheduler service logs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return service.LogsCurrentOS(service.LogsOptions{
+				Name:   name,
+				User:   user,
+				System: system,
+				Tail:   tail,
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&name, "name", service.DefaultName, "Service name")
+	cmd.Flags().BoolVar(&user, "user", false, "Show user-level service logs")
+	cmd.Flags().BoolVar(&system, "system", false, "Show system-level service logs")
+	cmd.Flags().IntVar(&tail, "tail", 100, "Number of log lines to show")
 
 	return cmd
 }

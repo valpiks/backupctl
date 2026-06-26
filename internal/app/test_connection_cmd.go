@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/secrets"
 )
@@ -23,8 +22,7 @@ func newTestCommand(opts CLIOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
-
-			cfg, err := config.Load(configPath)
+			cfg, err := loadConfig(configPath)
 			if err != nil {
 				return err
 			}
@@ -53,7 +51,7 @@ func newTestCommand(opts CLIOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	addConfigFlag(cmd, &configPath)
 
 	return cmd
 }

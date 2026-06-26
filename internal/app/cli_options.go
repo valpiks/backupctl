@@ -19,5 +19,5 @@ func commandLogger(cfg *config.Config, opts CLIOptions) *slog.Logger {
 		level = "debug"
 	}
 
-	return logger.NewCommand(level)
+	return logger.NewCommand(level, cfg.Logging.Format)
 }

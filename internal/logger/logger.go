@@ -5,19 +5,19 @@ import (
 	"os"
 )
 
-func New(level string) *slog.Logger {
-	return newLogger(os.Stderr, level)
+func New(level string, format ...string) *slog.Logger {
+	return newLogger(os.Stderr, level, firstFormat(format))
 }
 
-func NewCommand(level string) *slog.Logger {
+func NewCommand(level string, format ...string) *slog.Logger {
 	if level != "debug" {
 		level = "warn"
 	}
 
-	return newLogger(os.Stderr, level)
+	return newLogger(os.Stderr, level, firstFormat(format))
 }
 
-func newLogger(out *os.File, level string) *slog.Logger {
+func newLogger(out *os.File, level string, format string) *slog.Logger {
 	var slogLevel slog.Level
 
 	switch level {
@@ -31,9 +31,22 @@ func newLogger(out *os.File, level string) *slog.Logger {
 		slogLevel = slog.LevelInfo
 	}
 
-	handler := slog.NewTextHandler(out, &slog.HandlerOptions{
+	opts := &slog.HandlerOptions{
 		Level: slogLevel,
-	})
+	}
+
+	if format == "json" {
+		return slog.New(slog.NewJSONHandler(out, opts))
+	}
+
+	handler := slog.NewTextHandler(out, opts)
 
 	return slog.New(handler)
+}
+
+func firstFormat(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }

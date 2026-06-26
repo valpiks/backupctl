@@ -15,11 +15,13 @@ func NewStorage(cfg config.StorageConfig) (storage.Storage, error) {
 		return local.NewStorage(cfg.Local.Path)
 	case "s3":
 		return s3.NewStorage(s3.Config{
-			Bucket:         cfg.S3.Bucket,
-			Region:         cfg.S3.Region,
-			Prefix:         cfg.S3.Prefix,
-			Endpoint:       cfg.S3.Endpoint,
-			ForcePathStyle: cfg.S3.ForcePathStyle,
+			Bucket:               cfg.S3.Bucket,
+			Region:               cfg.S3.Region,
+			Prefix:               cfg.S3.Prefix,
+			Endpoint:             cfg.S3.Endpoint,
+			ForcePathStyle:       cfg.S3.ForcePathStyle,
+			ServerSideEncryption: cfg.S3.ServerSideEncryption,
+			SSEKMSKeyID:          cfg.S3.SSEKMSKeyID,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported storage format: %s", cfg.Type)

@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/compression"
-	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/encryption"
 	"github.com/valpiks/backupctl/internal/secrets"
@@ -22,6 +21,8 @@ func newBackupCommand(opts CLIOptions) *cobra.Command {
 	var tables []string
 	var format string
 	var jsonOutput bool
+	var verify bool
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "backup",
@@ -42,8 +43,7 @@ func newBackupCommand(opts CLIOptions) *cobra.Command {
 			if format != "plain" && format != "custom" {
 				return WithHint(fmt.Errorf("unsupported format: %s", format), "use --format plain or --format custom")
 			}
-
-			cfg, err := config.Load(configPath)
+			cfg, err := loadConfig(configPath)
 			if err != nil {
 				return err
 			}
@@ -52,6 +52,41 @@ func newBackupCommand(opts CLIOptions) *cobra.Command {
 
 			log := commandLogger(cfg, opts)
 			log.Info("config loaded", "path", configPath)
+
+			if dryRun {
+				payload := map[string]any{
+					"status":        "success",
+					"dry_run":       true,
+					"database":      cfg.Database.ActiveDatabaseName(),
+					"database_type": cfg.Database.Type,
+					"backup_type":   cfg.Backup.Type,
+					"format":        format,
+					"schema_only":   schemaOnly,
+					"data_only":     dataOnly,
+					"tables":        tables,
+					"storage":       cfg.Storage.Type,
+					"compression":   compressionForFormat(format),
+					"encrypted":     encryptionEnabled(cfg),
+				}
+
+				if jsonOutput {
+					return PrintJSON(cmd.OutOrStdout(), payload)
+				}
+
+				if !opts.Quiet {
+					PrintKV(cmd.OutOrStdout(), "Backup dry run", []KV{
+						{Key: "database", Value: cfg.Database.ActiveDatabaseName()},
+						{Key: "database_type", Value: cfg.Database.Type},
+						{Key: "backup_type", Value: cfg.Backup.Type},
+						{Key: "format", Value: format},
+						{Key: "storage", Value: cfg.Storage.Type},
+						{Key: "compression", Value: compressionForFormat(format)},
+						{Key: "encrypted", Value: YesNo(encryptionEnabled(cfg))},
+					})
+				}
+
+				return nil
+			}
 
 			driver, err := dbfactory.NewDriver(cfg.Database)
 			if err != nil {
@@ -79,10 +114,21 @@ func newBackupCommand(opts CLIOptions) *cobra.Command {
 				"type", cfg.Backup.Type,
 			)
 
-			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type, SchemaOnly: schemaOnly, DataOnly: dataOnly, Tables: tables, Format: format, EncryptionEnabled: encryptionEnabled(cfg), EncryptionPassword: encryptionPassword(cfg)})
+			result, err := service.Run(ctx, backup.Options{DatabaseName: cfg.Database.ActiveDatabaseName(), BackupType: cfg.Backup.Type, SchemaOnly: schemaOnly, DataOnly: dataOnly, Tables: tables, Format: format, EncryptionEnabled: encryptionEnabled(cfg), EncryptionPassword: encryptionPassword(cfg), BackupctlVersion: Version})
 			if err != nil {
 				log.Error("backup failed", "error", secrets.Redact(err.Error(), knownSecrets))
 				return redactError(err, knownSecrets)
+			}
+
+			if verify {
+				decryptPassword := ""
+				if encryptionEnabled(cfg) {
+					decryptPassword = encryptionPassword(cfg)
+				}
+				if _, err := verifyBackup(ctx, storage, result.FileName, verifyOptions{DatabaseType: cfg.Database.Type, DecryptPassword: decryptPassword}); err != nil {
+					log.Error("backup verification failed", "file", result.FileName, "error", secrets.Redact(err.Error(), knownSecrets))
+					return redactError(fmt.Errorf("backup created but verification failed: %w", err), knownSecrets)
+				}
 			}
 
 			duration := result.EndedAt.Sub(result.StartedAt)
@@ -100,6 +146,7 @@ func newBackupCommand(opts CLIOptions) *cobra.Command {
 				"format":    format,
 				"duration":  HumanDuration(duration),
 				"encrypted": YesNo(encryptionEnabled(cfg)),
+				"verified":  YesNo(verify),
 			}
 
 			if jsonOutput {
@@ -114,22 +161,32 @@ func newBackupCommand(opts CLIOptions) *cobra.Command {
 					{"format", payload["format"]},
 					{"duration", payload["duration"]},
 					{"encrypted", payload["encrypted"]},
+					{"verified", payload["verified"]},
 				})
 			}
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	addConfigFlag(cmd, &configPath)
 	cmd.Flags().BoolVar(&schemaOnly, "schema-only", false, "Backup schema only")
 	cmd.Flags().BoolVar(&dataOnly, "data-only", false, "Backup data only")
 	cmd.Flags().StringSliceVar(&tables, "tables", nil, "Comma-separated list of tables")
 	cmd.Flags().StringVar(&format, "format", "plain", "Backup format: plain or custom")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print backup result as JSON")
+	cmd.Flags().BoolVar(&verify, "verify", false, "Verify backup after upload")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show backup plan without creating a backup")
 
 	_ = cmd.RegisterFlagCompletionFunc("format", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return []string{"plain", "custom"}, cobra.ShellCompDirectiveNoFileComp
 	})
 
 	return cmd
+}
+
+func compressionForFormat(format string) string {
+	if format == "plain" {
+		return "gzip"
+	}
+	return ""
 }

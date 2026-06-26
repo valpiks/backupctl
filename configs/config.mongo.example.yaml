@@ -15,3 +15,4 @@ storage:
 
 logging:
   level: info
+  format: text

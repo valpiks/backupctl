@@ -22,7 +22,11 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X github.com/valpiks/backupctl/internal/app.Version={{ .Version }}
+      - >-
+        -s -w
+        -X github.com/valpiks/backupctl/internal/app.Version={{ .Version }}
+        -X github.com/valpiks/backupctl/internal/app.Commit={{ .Commit }}
+        -X github.com/valpiks/backupctl/internal/app.Date={{ .Date }}
 
 archives:
   - id: default
@@ -38,6 +42,55 @@ archives:
 
 checksum:
   name_template: checksums.txt
+
+nfpms:
+  - id: linux-packages
+    package_name: backupctl
+    ids:
+      - backupctl
+    vendor: valpiks
+    homepage: https://github.com/valpiks/backupctl
+    maintainer: valpiks
+    description: Database backup and restore CLI for PostgreSQL and MongoDB.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+    recommends:
+      - postgresql-client
+    scripts:
+      postinstall: scripts/postinstall.sh
+    contents:
+      - dst: /etc/backupctl
+        type: dir
+      - dst: /var/lib/backupctl/backups
+        type: dir
+      - dst: /var/log/backupctl
+        type: dir
+      - src: configs/config.vps.example.yaml
+        dst: /etc/backupctl/config.yaml
+        type: config|noreplace
+      - src: configs/backupctl.env.example
+        dst: /etc/backupctl/backupctl.env
+        type: config|noreplace
+      - src: configs/config.example.yaml
+        dst: /usr/share/doc/backupctl/config.example.yaml
+      - src: configs/config.vps.example.yaml
+        dst: /usr/share/doc/backupctl/config.vps.example.yaml
+      - src: configs/config.mongo.example.yaml
+        dst: /usr/share/doc/backupctl/config.mongo.example.yaml
+      - src: configs/config.s3.example.yaml
+        dst: /usr/share/doc/backupctl/config.s3.example.yaml
+      - src: configs/config.encrypted.example.yaml
+        dst: /usr/share/doc/backupctl/config.encrypted.example.yaml
+      - src: configs/config.scheduler.interval.example.yaml
+        dst: /usr/share/doc/backupctl/config.scheduler.interval.example.yaml
+      - src: configs/config.scheduler.cron.example.yaml
+        dst: /usr/share/doc/backupctl/config.scheduler.cron.example.yaml
+      - src: configs/backupctl.env.example
+        dst: /usr/share/doc/backupctl/backupctl.env.example
 
 changelog:
   sort: asc

@@ -350,6 +350,9 @@ func TestLoadEncryptionPasswordEnv(t *testing.T) {
 database:
   type: postgres
   postgres:
+    host: localhost
+    port: 5432
+    user: postgres
     name: app
 backup:
   type: full
@@ -384,6 +387,9 @@ func TestLoadEncryptionEnabledWithoutPasswordEnv(t *testing.T) {
 database:
   type: postgres
   postgres:
+    host: localhost
+    port: 5432
+    user: postgres
     name: app
 backup:
   type: full
@@ -428,6 +434,9 @@ runtime:
 database:
   type: postgres
   postgres:
+    host: localhost
+    port: 5432
+    user: postgres
     name: app
     password_env: BACKUPCTL_POSTGRES_PASSWORD
 backup:
@@ -553,6 +562,9 @@ func TestLoadSchedulerConfig(t *testing.T) {
 database:
   type: postgres
   postgres:
+    host: localhost
+    port: 5432
+    user: postgres
     name: app
 backup:
   type: full
@@ -600,7 +612,7 @@ func TestLoadSchedulerConfigValidation(t *testing.T) {
 			block: `
   scheduler:
     enabled: true`,
-			wantErr: "either scheduler.interval or scheduler.cron is required",
+			wantErr: "either backup.scheduler.interval or backup.scheduler.cron is required",
 		},
 		{
 			name: "cron and interval together",
@@ -609,7 +621,7 @@ func TestLoadSchedulerConfigValidation(t *testing.T) {
     enabled: true
     cron: "0 3 * * *"
     interval: 24h`,
-			wantErr: "scheduler.interval and scheduler.cron cannot be used together",
+			wantErr: "backup.scheduler.interval and backup.scheduler.cron cannot be used together",
 		},
 		{
 			name: "invalid interval",
@@ -617,7 +629,7 @@ func TestLoadSchedulerConfigValidation(t *testing.T) {
   scheduler:
     enabled: true
     interval: nope`,
-			wantErr: "invalid scheduler.interval",
+			wantErr: "invalid backup.scheduler.interval",
 		},
 	}
 
@@ -630,6 +642,9 @@ func TestLoadSchedulerConfigValidation(t *testing.T) {
 database:
   type: postgres
   postgres:
+    host: localhost
+    port: 5432
+    user: postgres
     name: app
 backup:
   type: full
@@ -652,6 +667,132 @@ logging:
 				t.Fatalf("Load() error = %v, want to contain %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateStructureRejectsUnsupportedDatabaseType(t *testing.T) {
+	t.Parallel()
+
+	cfg := validPostgresConfig()
+	cfg.Database.Type = "mysql"
+
+	err := cfg.ValidateStructure()
+	if err == nil || !strings.Contains(err.Error(), "unsupported database.type") {
+		t.Fatalf("ValidateStructure() error = %v, want unsupported database.type", err)
+	}
+}
+
+func TestValidateStructureRejectsUnsupportedStorageType(t *testing.T) {
+	t.Parallel()
+
+	cfg := validPostgresConfig()
+	cfg.Storage.Type = "ftp"
+
+	err := cfg.ValidateStructure()
+	if err == nil || !strings.Contains(err.Error(), "unsupported storage.type") {
+		t.Fatalf("ValidateStructure() error = %v, want unsupported storage.type", err)
+	}
+}
+
+func TestValidateStructureRejectsMissingMongoURI(t *testing.T) {
+	t.Parallel()
+
+	cfg := validPostgresConfig()
+	cfg.Database = DatabaseConfig{
+		Type: "mongo",
+		Mongo: MongoConfig{
+			Database: "app",
+		},
+	}
+
+	err := cfg.ValidateStructure()
+	if err == nil || !strings.Contains(err.Error(), "database.mongo.uri or database.mongo.uri_env is required") {
+		t.Fatalf("ValidateStructure() error = %v, want missing mongo uri error", err)
+	}
+}
+
+func TestValidateStructureAcceptsMongoURIEnv(t *testing.T) {
+	t.Parallel()
+
+	cfg := validPostgresConfig()
+	cfg.Database = DatabaseConfig{
+		Type: "mongo",
+		Mongo: MongoConfig{
+			URIEnv:   "BACKUPCTL_MONGO_URI",
+			Database: "app",
+		},
+	}
+
+	if err := cfg.ValidateStructure(); err != nil {
+		t.Fatalf("ValidateStructure() error = %v", err)
+	}
+}
+
+func TestValidateStructureRejectsInvalidCompression(t *testing.T) {
+	t.Parallel()
+
+	cfg := validPostgresConfig()
+	cfg.Backup.Compression = "zip"
+
+	err := cfg.ValidateStructure()
+	if err == nil || !strings.Contains(err.Error(), "unsupported backup.compression") {
+		t.Fatalf("ValidateStructure() error = %v, want unsupported backup.compression", err)
+	}
+}
+
+func TestValidateStructureAcceptsEncryptionPasswordEnv(t *testing.T) {
+	t.Parallel()
+
+	cfg := validPostgresConfig()
+	cfg.Backup.Encryption = &EncryptionConfig{
+		Enabled:     true,
+		PasswordEnv: "BACKUPCTL_ENCRYPTION_PASSWORD",
+	}
+
+	if err := cfg.ValidateStructure(); err != nil {
+		t.Fatalf("ValidateStructure() error = %v", err)
+	}
+}
+
+func TestValidateRequiresResolvedEncryptionPassword(t *testing.T) {
+	t.Parallel()
+
+	cfg := validPostgresConfig()
+	cfg.Backup.Encryption = &EncryptionConfig{
+		Enabled:     true,
+		PasswordEnv: "BACKUPCTL_ENCRYPTION_PASSWORD",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "backup.encryption password is required") {
+		t.Fatalf("Validate() error = %v, want resolved encryption password error", err)
+	}
+}
+
+func validPostgresConfig() *Config {
+	return &Config{
+		Database: DatabaseConfig{
+			Type: "postgres",
+			Postgres: PostgresConfig{
+				Host: "localhost",
+				Port: 5432,
+				User: "postgres",
+				Name: "app",
+			},
+		},
+		Backup: BackupConfig{
+			Type:        "full",
+			Compression: "gzip",
+		},
+		Storage: StorageConfig{
+			Type: "local",
+			Local: LocalStorageConfig{
+				Path: "./backups",
+			},
+		},
+		Logging: LoggingConfig{
+			Level: "info",
+		},
 	}
 }
 

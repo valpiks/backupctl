@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/backup"
-	"github.com/valpiks/backupctl/internal/config"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -35,8 +34,7 @@ func newCleanupCommand(opts CLIOptions) *cobra.Command {
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
-
-			cfg, err := config.Load(configPath)
+			cfg, err := loadConfig(configPath)
 			if err != nil {
 				return err
 			}
@@ -143,7 +141,7 @@ func newCleanupCommand(opts CLIOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	addConfigFlag(cmd, &configPath)
 	cmd.Flags().IntVar(&keepLast, "keep-last", 0, "Set cleanup limit")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview delete files")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print cleanup result as JSON")

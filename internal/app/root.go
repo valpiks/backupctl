@@ -15,13 +15,14 @@ func NewRootCommand() *cobra.Command {
 It supports PostgreSQL and MongoDB, local and S3-compatible storage,
 gzip compression, AES-GCM encryption, scheduled jobs, and background
 services through systemd or launchd.`,
-		Example: `  backupctl doctor -c configs/config.yaml
-  backupctl backup -c configs/config.yaml
-  backupctl list -c configs/config.yaml
-  backupctl restore -c configs/config.yaml --file app_20260607_120000.sql.gz
-  backupctl schedule -c configs/config.yaml --interval 24h
+		Example: `  backupctl init
+  backupctl doctor
+  backupctl backup
+  backupctl list
+  backupctl restore --file app_20260607_120000.sql.gz
+  backupctl schedule --interval 24h
   backupctl scheduler run
-  backupctl service install --user --config configs/config.yaml`,
+  backupctl service install --user`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -31,6 +32,7 @@ services through systemd or launchd.`,
 	rootCmd.PersistentFlags().StringVar(&opts.Color, "color", "auto", "Color output: auto, always, never")
 
 	rootCmd.AddCommand(newVersionCommand())
+	rootCmd.AddCommand(newInitCommand(opts))
 	rootCmd.AddCommand(newConfigCommand(opts))
 	rootCmd.AddCommand(newTestCommand(opts))
 	rootCmd.AddCommand(newBackupCommand(opts))
@@ -38,6 +40,7 @@ services through systemd or launchd.`,
 	rootCmd.AddCommand(newRestoreCommand(opts))
 	rootCmd.AddCommand(newDoctorCommand(opts))
 	rootCmd.AddCommand(newCleanupCommand(opts))
+	rootCmd.AddCommand(newVerifyCommand(opts))
 	rootCmd.AddCommand(newScheduleCommand(opts))
 	rootCmd.AddCommand(newSchedulerCommand())
 	rootCmd.AddCommand(newServiceCommand())

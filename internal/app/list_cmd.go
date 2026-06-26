@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/backup"
-	"github.com/valpiks/backupctl/internal/config"
 	"github.com/valpiks/backupctl/internal/secrets"
+	storagepkg "github.com/valpiks/backupctl/internal/storage"
 	storagefactory "github.com/valpiks/backupctl/internal/storage/factory"
 )
 
@@ -21,6 +21,7 @@ func newListCommand(opts CLIOptions) *cobra.Command {
 	var limit int
 	var showFiles bool
 	var jsonOutput bool
+	var verifiedOnly bool
 
 	cmd := &cobra.Command{
 		Use:     "list",
@@ -34,8 +35,7 @@ func newListCommand(opts CLIOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
-
-			cfg, err := config.Load(configPath)
+			cfg, err := loadConfig(configPath)
 			if err != nil {
 				return err
 			}
@@ -56,6 +56,21 @@ func newListCommand(opts CLIOptions) *cobra.Command {
 			if err != nil {
 				log.Error("list backups failed", "error", secrets.Redact(err.Error(), knownSecrets))
 				return redactError(err, knownSecrets)
+			}
+
+			if verifiedOnly {
+				filtered := make([]storagepkg.BackupFile, 0, len(files))
+				for _, file := range files {
+					if strings.HasSuffix(file.Name, ".metadata.json") {
+						continue
+					}
+
+					if _, err := verifyBackup(ctx, storage, file.Name, verifyOptions{DatabaseType: cfg.Database.Type, DecryptPassword: encryptionPassword(cfg)}); err == nil {
+						filtered = append(filtered, file)
+					}
+				}
+
+				files = filtered
 			}
 
 			fileSizes := make(map[string]int64, len(files))
@@ -111,6 +126,18 @@ func newListCommand(opts CLIOptions) *cobra.Command {
 				metadataList = append(metadataList, metadata)
 			}
 
+			if verifiedOnly {
+				filtered := make([]backup.Metadata, 0, len(metadataList))
+
+				for _, meta := range metadataList {
+					if _, err := verifyBackup(ctx, storage, meta.FileName, verifyOptions{DatabaseType: cfg.Database.Type, DecryptPassword: encryptionPassword(cfg)}); err == nil {
+						filtered = append(filtered, meta)
+					}
+				}
+
+				metadataList = filtered
+			}
+
 			sort.Slice(metadataList, func(i, j int) bool {
 				return metadataList[i].StartedAt.After(metadataList[j].StartedAt)
 			})
@@ -157,10 +184,11 @@ func newListCommand(opts CLIOptions) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	addConfigFlag(cmd, &configPath)
 	cmd.Flags().IntVar(&limit, "limit", 0, "Limit number of backups shown")
 	cmd.Flags().BoolVar(&showFiles, "files", false, "Show raw backup directory files")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Print backups as JSON")
+	cmd.Flags().BoolVar(&verifiedOnly, "verified", false, "Show only backups that pass metadata verification")
 
 	return cmd
 }

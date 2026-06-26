@@ -18,17 +18,21 @@ import (
 const multipartChunkSize = 5 * 1024 * 1024
 
 type Storage struct {
-	client *s3client.Client
-	bucket string
-	prefix string
+	client               *s3client.Client
+	bucket               string
+	prefix               string
+	serverSideEncryption string
+	sseKMSKeyID          string
 }
 
 type Config struct {
-	Bucket         string
-	Region         string
-	Prefix         string
-	Endpoint       string
-	ForcePathStyle bool
+	Bucket               string
+	Region               string
+	Prefix               string
+	Endpoint             string
+	ForcePathStyle       bool
+	ServerSideEncryption string
+	SSEKMSKeyID          string
 }
 
 func NewStorage(cfg Config) (*Storage, error) {
@@ -64,9 +68,11 @@ func NewStorage(cfg Config) (*Storage, error) {
 	})
 
 	return &Storage{
-		client: client,
-		bucket: cfg.Bucket,
-		prefix: strings.TrimSuffix(cfg.Prefix, "/"),
+		client:               client,
+		bucket:               cfg.Bucket,
+		prefix:               strings.TrimSuffix(cfg.Prefix, "/"),
+		serverSideEncryption: cfg.ServerSideEncryption,
+		sseKMSKeyID:          cfg.SSEKMSKeyID,
 	}, nil
 }
 
@@ -77,21 +83,13 @@ func (s *Storage) Save(ctx context.Context, name string, data io.Reader) error {
 	n, readErr := io.ReadFull(data, firstPart)
 	switch {
 	case readErr == io.EOF && n == 0:
-		_, err := s.client.PutObject(ctx, &s3client.PutObjectInput{
-			Bucket: aws.String(s.bucket),
-			Key:    aws.String(key),
-			Body:   bytes.NewReader(nil),
-		})
+		_, err := s.client.PutObject(ctx, s.putObjectInput(key, bytes.NewReader(nil)))
 		if err != nil {
 			return fmt.Errorf("upload %s: %w", name, err)
 		}
 		return nil
 	case readErr == io.ErrUnexpectedEOF:
-		_, err := s.client.PutObject(ctx, &s3client.PutObjectInput{
-			Bucket: aws.String(s.bucket),
-			Key:    aws.String(key),
-			Body:   bytes.NewReader(firstPart[:n]),
-		})
+		_, err := s.client.PutObject(ctx, s.putObjectInput(key, bytes.NewReader(firstPart[:n])))
 		if err != nil {
 			return fmt.Errorf("upload %s: %w", name, err)
 		}
@@ -100,10 +98,13 @@ func (s *Storage) Save(ctx context.Context, name string, data io.Reader) error {
 		return fmt.Errorf("read upload body %s: %w", name, readErr)
 	}
 
-	createOutput, err := s.client.CreateMultipartUpload(ctx, &s3client.CreateMultipartUploadInput{
+	createInput := &s3client.CreateMultipartUploadInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
-	})
+	}
+	s.applyServerSideEncryption(createInput)
+
+	createOutput, err := s.client.CreateMultipartUpload(ctx, createInput)
 	if err != nil {
 		return fmt.Errorf("create multipart upload %s: %w", name, err)
 	}
@@ -276,6 +277,34 @@ func (s *Storage) key(name string) string {
 	}
 
 	return s.prefix + "/" + name
+}
+
+func (s *Storage) putObjectInput(key string, body io.Reader) *s3client.PutObjectInput {
+	input := &s3client.PutObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+		Body:   body,
+	}
+
+	if s.serverSideEncryption != "" {
+		input.ServerSideEncryption = s3types.ServerSideEncryption(s.serverSideEncryption)
+	}
+
+	if s.sseKMSKeyID != "" {
+		input.SSEKMSKeyId = aws.String(s.sseKMSKeyID)
+	}
+
+	return input
+}
+
+func (s *Storage) applyServerSideEncryption(input *s3client.CreateMultipartUploadInput) {
+	if s.serverSideEncryption != "" {
+		input.ServerSideEncryption = s3types.ServerSideEncryption(s.serverSideEncryption)
+	}
+
+	if s.sseKMSKeyID != "" {
+		input.SSEKMSKeyId = aws.String(s.sseKMSKeyID)
+	}
 }
 
 func (s *Storage) listPrefix() string {

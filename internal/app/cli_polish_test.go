@@ -24,7 +24,7 @@ func TestRootHelpContainsExamplesAndCompletion(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"backupctl doctor", "backupctl backup", "completion"} {
+	for _, want := range []string{"backupctl init", "backupctl doctor", "backupctl backup", "completion"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("help output = %q, want %q", got, want)
 		}

@@ -412,3 +412,42 @@ func TestUninstallSystemdUserService(t *testing.T) {
 		}
 	}
 }
+
+func TestRestartSystemdUserService(t *testing.T) {
+	runner := &fakeRunner{}
+
+	err := Restart("linux", RestartOptions{
+		Name:   "backupctl-scheduler",
+		User:   true,
+		Runner: runner,
+	})
+	if err != nil {
+		t.Fatalf("Restart() error = %v", err)
+	}
+
+	got := strings.Join(runner.calls, "\n")
+	want := "systemctl --user restart backupctl-scheduler.service"
+	if !strings.Contains(got, want) {
+		t.Fatalf("calls do not contain %q:\n%s", want, got)
+	}
+}
+
+func TestLogsSystemdUserService(t *testing.T) {
+	runner := &fakeRunner{}
+
+	err := Logs("linux", LogsOptions{
+		Name:   "backupctl-scheduler",
+		User:   true,
+		Tail:   25,
+		Runner: runner,
+	})
+	if err != nil {
+		t.Fatalf("Logs() error = %v", err)
+	}
+
+	got := strings.Join(runner.calls, "\n")
+	want := "journalctl --user -u backupctl-scheduler.service -n 25 --no-pager"
+	if !strings.Contains(got, want) {
+		t.Fatalf("calls do not contain %q:\n%s", want, got)
+	}
+}

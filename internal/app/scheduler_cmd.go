@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/valpiks/backupctl/internal/backup"
 	"github.com/valpiks/backupctl/internal/compression"
-	"github.com/valpiks/backupctl/internal/config"
 	dbfactory "github.com/valpiks/backupctl/internal/database/factory"
 	"github.com/valpiks/backupctl/internal/encryption"
 	"github.com/valpiks/backupctl/internal/logger"
@@ -45,18 +44,17 @@ func newSchedulerRunCommand() *cobra.Command {
 				cmd.Context(), os.Interrupt, syscall.SIGTERM,
 			)
 			defer stop()
-
-			cfg, err := config.Load(configPath)
+			cfg, err := loadConfig(configPath)
 			if err != nil {
 				return err
 			}
 
 			knownSecrets := cfg.KnownSecrets()
 
-			log := logger.New(cfg.Logging.Level)
+			log := logger.New(cfg.Logging.Level, cfg.Logging.Format)
 
 			if cfg.Backup.Scheduler != nil && cfg.Backup.Scheduler.LogFile != "" {
-				fileLog, closeLog, err := logger.NewFile(cfg.Logging.Level, cfg.Backup.Scheduler.LogFile)
+				fileLog, closeLog, err := logger.NewFile(cfg.Logging.Level, cfg.Backup.Scheduler.LogFile, cfg.Logging.Format)
 				if err != nil {
 					return err
 				}
@@ -88,6 +86,7 @@ func newSchedulerRunCommand() *cobra.Command {
 			store := scheduler.NewJSONStore(".backupctl/jobs.json")
 			service := scheduler.NewService(store, backupService, log)
 			service.SetEncryption(encryptionEnabled(cfg), encryptionPassword(cfg))
+			service.SetBackupctlVersion(Version)
 
 			if err := service.RegisterCronJobs(ctx); err != nil {
 				log.Error("register cron jobs failed", "error", secrets.Redact(err.Error(), knownSecrets))
@@ -113,7 +112,7 @@ func newSchedulerRunCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "configs/config.yaml", "Path to config file")
+	addConfigFlag(cmd, &configPath)
 
 	return cmd
 }

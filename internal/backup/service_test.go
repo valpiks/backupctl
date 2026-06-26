@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -120,9 +122,10 @@ func TestService_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
 	service := NewService(driver, st, compressor, nil)
 
 	result, err := service.Run(context.Background(), Options{
-		DatabaseName: "testdb",
-		BackupType:   "full",
-		Format:       "plain",
+		DatabaseName:     "testdb",
+		BackupType:       "full",
+		Format:           "plain",
+		BackupctlVersion: "v1.0.0-test",
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -182,6 +185,20 @@ func TestService_Run_SavesCompressedBackupAndMetadata(t *testing.T) {
 
 	if meta.Status != "success" {
 		t.Fatalf("metadata status = %q", meta.Status)
+	}
+
+	if meta.FileSize != int64(len(backupData)) {
+		t.Fatalf("metadata file_size = %d, want %d", meta.FileSize, len(backupData))
+	}
+
+	sum := sha256.Sum256(backupData)
+	wantSHA256 := hex.EncodeToString(sum[:])
+	if meta.SHA256 != wantSHA256 {
+		t.Fatalf("metadata sha256 = %q, want %q", meta.SHA256, wantSHA256)
+	}
+
+	if meta.BackupctlVersion != "v1.0.0-test" {
+		t.Fatalf("metadata backupctl_version = %q", meta.BackupctlVersion)
 	}
 }
 
@@ -423,8 +440,8 @@ func TestService_Run_SavesTablesList(t *testing.T) {
 		t.Fatalf("unmarshal metadata: %v", err)
 	}
 
-	if !stringsEqual(metadata.Tabels, []string{"users", "orders"}) {
-		t.Fatalf("metadata tables = %v, want [users orders]", metadata.Tabels)
+	if !stringsEqual(metadata.Tables, []string{"users", "orders"}) {
+		t.Fatalf("metadata tables = %v, want [users orders]", metadata.Tables)
 	}
 }
 

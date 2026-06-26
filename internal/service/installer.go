@@ -40,6 +40,21 @@ type UninstallOptions struct {
 	Runner CommandRunner
 }
 
+type RestartOptions struct {
+	Name   string
+	User   bool
+	System bool
+	Runner CommandRunner
+}
+
+type LogsOptions struct {
+	Name   string
+	User   bool
+	System bool
+	Tail   int
+	Runner CommandRunner
+}
+
 type RenderedService struct {
 	Path    string
 	Content string
@@ -295,6 +310,72 @@ func Status(goos string, opts StatusOptions) error {
 
 func UninstallCurrentOS(opts UninstallOptions) error {
 	return Uninstall(runtime.GOOS, opts)
+}
+
+func RestartCurrentOS(opts RestartOptions) error {
+	return Restart(runtime.GOOS, opts)
+}
+
+func Restart(goos string, opts RestartOptions) error {
+	if opts.Name == "" {
+		opts.Name = DefaultName
+	}
+
+	if opts.Runner == nil {
+		opts.Runner = ExecRunner{}
+	}
+
+	if err := validateServiceScope(opts.User, opts.System); err != nil {
+		return err
+	}
+
+	if err := validatePlatformScope(goos, opts.User, opts.System); err != nil {
+		return err
+	}
+
+	switch goos {
+	case "linux":
+		return restartSystemdService(opts)
+	case "darwin":
+		return restartLaunchdService(opts)
+	default:
+		return fmt.Errorf("service restart is not supported on %s", goos)
+	}
+}
+
+func LogsCurrentOS(opts LogsOptions) error {
+	return Logs(runtime.GOOS, opts)
+}
+
+func Logs(goos string, opts LogsOptions) error {
+	if opts.Name == "" {
+		opts.Name = DefaultName
+	}
+
+	if opts.Tail <= 0 {
+		opts.Tail = 100
+	}
+
+	if opts.Runner == nil {
+		opts.Runner = ExecRunner{}
+	}
+
+	if err := validateServiceScope(opts.User, opts.System); err != nil {
+		return err
+	}
+
+	if err := validatePlatformScope(goos, opts.User, opts.System); err != nil {
+		return err
+	}
+
+	switch goos {
+	case "linux":
+		return logsSystemdService(opts)
+	case "darwin":
+		return logsLaunchdService(opts)
+	default:
+		return fmt.Errorf("service logs is not supported on %s", goos)
+	}
 }
 
 func Uninstall(goos string, opts UninstallOptions) error {
